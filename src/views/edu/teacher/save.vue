@@ -1,6 +1,5 @@
 <template>
   <div class="app-container">
-    <h2>讲师添加</h2>
     <el-form label-width="120px">
       <!-- 讲师名称 -->
       <el-form-item label="讲师名称">
@@ -54,10 +53,33 @@ export default {
       saveBtnDisabled: false, //点击一次后按钮是否被禁用
     };
   },
-  created() {},
+  created() {
+    //判断路径是否有id值
+    if (this.$route.params && this.$route.params.id) {
+      //从路径获取id值
+      const id = this.$route.params.id;
+      //调用根据id查询讲师的方法
+      this.getTeacher(id);
+    }
+  },
   methods: {
+    //根据讲师id查询
+    getTeacher(id) {
+      teacherApi.getTeacher(id).then((result) => {
+        this.teacher = result.data.teacher;
+      });
+    },
     saveOrUpdate() {
-      this.saveTeacher();
+      /**
+       * 判断修改还是添加（根据teacher中是否有id）
+       */
+      //无id 添加
+      if (!this.teacher.id) {
+        this.saveTeacher();
+      } else {
+        //有id 修改
+        this.updateTeacher();
+      }
     },
     //添加讲师的方法
     saveTeacher() {
@@ -66,6 +88,18 @@ export default {
         this.$message({
           type: "success",
           message: "添加成功！",
+        });
+        //2.返回讲师列表（路由跳转）
+        this.$router.push({ path: "/teacher/table" });
+      });
+    },
+    //修改讲师的方法
+    updateTeacher() {
+      teacherApi.updateTeacher(this.teacher).then((result) => {
+        //1.提示修改成功
+        this.$message({
+          type: "success",
+          message: "修改成功！",
         });
         //2.返回讲师列表（路由跳转）
         this.$router.push({ path: "/teacher/table" });
