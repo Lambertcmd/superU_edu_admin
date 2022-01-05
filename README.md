@@ -809,7 +809,9 @@ export function logout() {
 
    controller类上添加注解`@CrossOrigin`
 
-## 05、讲师CRUD功能前端实现
+# 五、后台管理系统-前端页面实现
+
+## 01、讲师CRUD功能前端实现
 
 1. 添加讲师列表和添加讲师路由
 
@@ -1035,7 +1037,7 @@ export function logout() {
 
    ![](README.assets/image-20220102184039863.png)
 
-### 05-1、讲师列表-分页功能实现
+### 01-1、讲师列表-分页功能实现
 
 1. 从element-ui选择分页组件写入`list.vue`并修改total,pagesize,pager-count和current-change参数
 
@@ -1128,7 +1130,7 @@ export function logout() {
 
    ![](README.assets/image-20220104105643052.png)
 
-### 05-2、讲师查询功能实现
+### 01-2、讲师查询功能实现
 
 1. 从element-ui选择form表单组件写入`list.vue`,加在表格列表的前面
 
@@ -1185,7 +1187,7 @@ export function logout() {
 
    ![](README.assets/image-20220104134852790.png)
 
-### 05-3、讲师删除
+### 01-3、讲师删除
 
 1. 每条记录后面添加删除按钮
 
@@ -1249,7 +1251,7 @@ export function logout() {
 
       <img src="README.assets/image-20220104154230268.png" style="zoom: 80%;" />
 
-### 05-4、讲师添加
+### 01-4、讲师添加
 
 1. 从element-ui选择form表单组件写入`save.vue`
 
@@ -1362,7 +1364,7 @@ export function logout() {
    2. 填写讲师信息提交
    3. 显示添加成功，跳转讲师列表
 
-### 05-5、讲师修改
+### 01-5、讲师修改
 
 1. `router`添加一个用于修改的隐藏路由页面
 
@@ -1414,7 +1416,6 @@ export function logout() {
    1. `api`定义根据id查询讲师数据接口
 
       ```javascript
-      
       /**
         * 根据id查询讲师
         * @param {} id 
@@ -1506,13 +1507,300 @@ export function logout() {
           },
       ```
 
+## 02、阿里云oss实现上传讲师头像
+
+> 首先需要注册阿里云账号，再去开通阿里云OSS
+
+阿里云OSS：https://oss.console.aliyun.com/overview
+
+### 02-1、阿里云oss管理控制台使用
+
+1. 使用OSS，首先需要创建bucket
+
+   <img src="README.assets/image-20220105103550086.png" style="zoom: 80%;" />
+
+2. 创建Bucket
+
+   1. Bucket名称
+   2. 存储类型：标准存储（高频访问），低频访问存储，归档存储（不支持访问）
+   3. 同城冗余存储：同城冗余存储能提高您的数据可用性，同时会采用相对较高的计费标准
+   4. 版本控制：开启版本控制特性后，针对数据的覆盖和删除操作将会以历史版本的形式保存下来。
+   5. 读写权限：私有，公共读，公共读写
+
+   <img src="README.assets/image-20220105112600448.png" style="zoom:80%;" />
+
+3. 测试上传文件
+
+   ![](README.assets/image-20220105113132456.png)
+
+   上传后点开文件详情有个URL地址 访问URL路径地址可以下载该文件
+
+   <img src="README.assets/image-20220105113249961.png" style="zoom:80%;" />
+
+### 02-2、阿里云oss许可证创建
+
+1. OSS管理控制台找到Access Key进入
+
+   <img src="README.assets/image-20220105135805550.png" style="zoom:67%;" />
+
+2. 创建AccessKey
+
+   <img src="README.assets/image-20220105135948414.png" alt="image-20220105135948414" style="zoom:67%;" />
+
+3. 创建成功查看AccessKeyID和AccessKeySecret
+
+阿里云OSS学习路径：https://help.aliyun.com/learn/learningpath/oss.html?spm=5176.7933691.J_9588141710.2.2e394c59RG2URP
+
+阿里云OSS Java学习文档：https://help.aliyun.com/document_detail/32008.html?spm=5176.208357.1107607.21.637f390fAnMrSx
+
+### 02-3、后端oss模块环境搭建
+
+1. 创建service的子模块service_oss模块
+
+2. 引入依赖（我使用的是3.1.0版本的OSS）
+
+   ```xml
+   <!--阿里云oss依赖-->
+   <dependency>
+       <groupId>com.aliyun.oss</groupId>
+       <artifactId>aliyun-sdk-oss</artifactId>
+   </dependency>
+   <!--日期工具栏-->
+   <dependency>
+       <groupId>joda-time</groupId>
+       <artifactId>joda-time</artifactId>
+   </dependency>
+   ```
+
+3. yml配置
+
+   ```yaml
+   server:
+     port: 8002
+   spring:
+     application:
+       name: service-oss
+     #开发环境设置
+     profiles:
+       active: dev
+   
+   aliyun:
+     oss:
+       file:
+         endpoint: oss-cn-shenzhen.aliyuncs.com
+         keyid: LTAI5tPvpheNZzHZqu2Htgko
+         keysecret: T18RmuOTonkTn7oyzGoUCrgIqWx28v
+         bucketname: guli-file--upload
+   ```
+
+4. 主启动
+
+   ```java
+   @SpringBootApplication
+   @ComponentScan(basePackages = {"com.geek"})
+   public class GuliServiceOssApplication {
+       public static void main(String[] args) {
+           SpringApplication.run(GuliServiceOssApplication.class,args );
+       }
+   }
+   ```
+
+常见问题
+
+1. 启动oss8002服务
+
+2. 报错没有配置数据源
+
+   <img src="README.assets/image-20220105143106449.png" style="zoom:67%;" />
+
+   oss服务是不需要用到数据库的
+
+3. 解决：
+
+   1. 配置数据源（由于不需要用到数据库，不推荐此方案）
+
+   2. 启动类上的@SpringBootApplication添加一个属性，默认不加载数据库配置
+
+      ```java
+      @SpringBootApplication(exclude = DataSourceAutoConfiguration.class)
+      ```
+
+### 02-4、oss上传头像功能实现
+
+#### 02-4-1、创建常量类
+
+> 用于读取yml配置文件的配置
+
+```java
+/**
+ * @ClassName ConstantPropertiesUtil
+ * @Description 读取yml配置的内容
+ * @Author Lambert
+ * @Date 2022/1/5 14:41
+ * @Version 1.0
+ **/
+@Component
+public class ConstantPropertiesUtil implements InitializingBean {
+
+    @Value("${aliyun.oss.file.enpoint}")
+    private String endpoint;
+
+    @Value("${aliyun.oss.file.keyid}")
+    private String keyId;
+
+    @Value("${aliyun.oss.file.keysecret}")
+    private String keySecret;
+
+    @Value("${aliyun.oss.file.bucketname}")
+    private String bucketName;
+
+    public static String END_POINT;
+
+    public static String ACCESS_KEY_ID;
+
+    public static String ACCESS_KEY_SECRET;
+
+    public static String BUCKET_NAME;
+
+    /**
+     * 项目启动时执行该方法
+     * @throws Exception
+     */
+    public void afterPropertiesSet() throws Exception {
+        END_POINT = endpoint;
+        ACCESS_KEY_ID = keyId;
+        ACCESS_KEY_SECRET = keySecret;
+        BUCKET_NAME = bucketName;
+    }
+}
+```
+
+#### 02-4-2、Service
+
+`OssService`
+
+```java
+public interface OssService {
+    /**
+     * 上传头像到oss
+     * @param file
+     * @return
+     */
+    String uploadFileAvatar(MultipartFile file);
+}
+```
+
+`OssServiceImpl`
+
+```java
+@Service
+public class OssServiceImpl implements OssService {
+
+
+    public String uploadFileAvatar(MultipartFile file) {
+        String endpoint = ConstantPropertiesUtil.END_POINT;
+        String accessKeyId = ConstantPropertiesUtil.ACCESS_KEY_ID;
+        String accessKeySecret = ConstantPropertiesUtil.ACCESS_KEY_SECRET;
+        String bucketName = ConstantPropertiesUtil.BUCKET_NAME;
+
+        try {
+            // 1.创建OSSClient实例
+            OSS ossClient = new OSSClientBuilder().build(endpoint, accessKeyId, accessKeySecret);
+
+            // 2.获取上传文件输入流
+            InputStream inputStream = file.getInputStream();
+
+            // 获取文件名称
+            String filename = file.getOriginalFilename();
+
+            // 3.调用oss方法实现上传 put(buckteName,上传到oss的文件路径和名称,上传文件输入流)
+            ossClient.putObject(bucketName, filename, inputStream);
+
+            // 4.关闭OSSClient。
+            ossClient.shutdown();
+
+            // 把上传到OSS的文件路径返回(需要手动拼接路径)
+            //https://guli-file--upload.oss-cn-shenzhen.aliyuncs.com/243824a061a29b4bff8bbe011207bbe1_1.jpg
+            String url = "https://"+ bucketName + "." + endpoint + "/" + filename;
+            return url;
+        } catch (Exception e) {
+            e.printStackTrace();
+            return null;
+        }
+
+    }
+}
+```
+
+#### 02-4-3、Controller
+
+`OssController`
+
+```java
+@RestController
+@Api(tags = "阿里云OSS文件上传")
+@RequestMapping("/eduoss/file-oss")
+public class OssController {
+
+    @Autowired
+    private OssService ossService;
+
+    /**
+     * 上传文件到阿里云oss
+     * @param file
+     * @return
+     */
+    @ApiOperation("上传文件到阿里云OSS")
+    @PostMapping
+    public R uploadOssFile(@RequestPart("file") MultipartFile file){
+        //获取上传的文件 MultipartFile并返回上传到oss的路径
+        String url = ossService.uploadFileAvatar(file);
+        return R.ok().data("url",url);
+    }
+}
+```
+
+#### 02-4-4、Swagger测试
+
+1. http://localhost:8002/swagger-ui/
+
+2. 上传文件
+
+   ![](README.assets/image-20220105160852351.png)
+
+3. 返回结果
+
+   ![](README.assets/image-20220105160904423.png)
+
+4. 阿里云OSS存储库
+
+   ![](README.assets/image-20220105161018145.png)
+
+### 02-5、功能完善
+
+#### 02-5-1、OSS存储库的同名覆盖问题
+
+> 当存储库有两个名称相同的文件时，后者会覆盖前者的文件
+
+解决：给文件名称添加一个随机的名称，使每个文件名都不相同
 
 
 
 
 
+#### 02-5-2、文件分类
+
+> 根据日期进行分类
 
 
+
+
+
+## 03、使用EasyExcel获取课程分类数据
+
+
+
+## 04、课程分类列表
 
 
 
