@@ -36,15 +36,15 @@ module.exports = {
       warnings: false,
       errors: true
     },
-    proxy: {
-      [process.env.VUE_APP_BASE_API]:{//后台服务器地址
-        target:"http://localhost:8001",
-        changeOrigin:true,
-        pathRewrite:{
-          ['^' + process.env.VUE_APP_BASE_API]:''
-        }
-      }
-    },
+    // proxy: {
+    //   [process.env.VUE_APP_BASE_API]:{//后台服务器地址
+    //    target:"http://localhost:8001",
+    //     changeOrigin:true,
+    //     pathRewrite:{
+    //       ['^' + process.env.VUE_APP_BASE_API]:''
+    //     }
+    //   }
+    // },
     before: require('./mock/mock-server.js')
   },
   configureWebpack: {

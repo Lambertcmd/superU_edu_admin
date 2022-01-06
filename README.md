@@ -1625,7 +1625,7 @@ export function logout() {
       @SpringBootApplication(exclude = DataSourceAutoConfiguration.class)
       ```
 
-### 02-4、oss上传头像功能实现
+### 02-4、后端oss上传头像功能实现
 
 #### 02-4-1、创建常量类
 
@@ -1784,23 +1784,374 @@ public class OssController {
 
 解决：给文件名称添加一个随机的名称，使每个文件名都不相同
 
+```java
+public String uploadFileAvatar(MultipartFile file) {
+    String endpoint = ConstantPropertiesUtil.END_POINT;
+    String accessKeyId = ConstantPropertiesUtil.ACCESS_KEY_ID;
+    String accessKeySecret = ConstantPropertiesUtil.ACCESS_KEY_SECRET;
+    String bucketName = ConstantPropertiesUtil.BUCKET_NAME;
 
+    try {
+        // 1.创建OSSClient实例
+        OSS ossClient = new OSSClientBuilder().build(endpoint, accessKeyId, accessKeySecret);
 
+        // 2.获取上传文件输入流
+        InputStream inputStream = file.getInputStream();
 
+        // 获取文件名称
+        String filename = file.getOriginalFilename();
+
+        // 给文件名称添加一个随机的名称，使每个文件名都不相同
+        String uuid = UUID.randomUUID().toString().replaceAll("-","");
+
+        // 3.调用oss方法实现上传 put(buckteName,上传到oss的文件路径和名称,上传文件输入流)
+        ossClient.putObject(bucketName, uuid + filename, inputStream);
+
+        // 4.关闭OSSClient。
+        ossClient.shutdown();
+
+        // 把上传到OSS的文件路径返回(需要手动拼接路径)
+        //https://guli-file--upload.oss-cn-shenzhen.aliyuncs.com/243824a061a29b4bff8bbe011207bbe1_1.jpg
+        String url = "https://"+ bucketName + "." + endpoint + "/" + filename;
+        return url;
+    } catch (Exception e) {
+        e.printStackTrace();
+        return null;
+    }
+
+}
+```
 
 #### 02-5-2、文件分类
 
 > 根据日期进行分类
 
+引入的DateTime:org.joda.time.DateTime;
+
+```java
+public String uploadFileAvatar(MultipartFile file) {
+    String endpoint = ConstantPropertiesUtil.END_POINT;
+    String accessKeyId = ConstantPropertiesUtil.ACCESS_KEY_ID;
+    String accessKeySecret = ConstantPropertiesUtil.ACCESS_KEY_SECRET;
+    String bucketName = ConstantPropertiesUtil.BUCKET_NAME;
+
+    try {
+        // 1.创建OSSClient实例
+        OSS ossClient = new OSSClientBuilder().build(endpoint, accessKeyId, accessKeySecret);
+
+        // 2.获取上传文件输入流
+        InputStream inputStream = file.getInputStream();
+
+        // 获取文件名称
+        String filename = file.getOriginalFilename();
+
+        // 给文件名称添加一个随机的名称，使每个文件名都不相同
+        String uuid = UUID.randomUUID().toString().replaceAll("-","");
+
+        filename = filename + uuid;
+        //把文件按照日期进行分类 (2022/01/06/01.jpg)
+        //获取当前日期
+        String datePath = new DateTime().toString("yyyy/MM/dd");
+        filename = datePath + "/" + filename;
+
+        // 3.调用oss方法实现上传 put(buckteName,上传到oss的文件路径和名称(aa/bb/ab.jpg),上传文件输入流)
+        ossClient.putObject(bucketName, filename, inputStream);
+
+        // 4.关闭OSSClient。
+        ossClient.shutdown();
+
+        // 把上传到OSS的文件路径返回(需要手动拼接路径)
+        //https://guli-file--upload.oss-cn-shenzhen.aliyuncs.com/243824a061a29b4bff8bbe011207bbe1_1.jpg
+        String url = "https://"+ bucketName + "." + endpoint + "/" + filename;
+        return url;
+    } catch (Exception e) {
+        e.printStackTrace();
+        return null;
+    }
+
+}
+```
+
+测试结果：
+
+<img src="README.assets/image-20220106085948489.png" style="zoom: 80%;" />
+
+
+
+### 02-6、Nginx实现请求转发
+
+1. 找到Nginx配置文件`nginx/conf/nginx.conf`
+
+2. 在http块添加一个转发规则
+
+   ```nginx
+   server{
+       listen          9002;
+       server_name     localhost;
+   
+       location ~ /eduservice/ {
+           proxy_pass http://10.1.53.58:8001;
+       }
+       location ~ /eduoss/ {
+           proxy_pass http://10.1.53.58:8002;
+       }
+   }
+   ```
+
+3. 前端修改代码`.env.development`
+
+   ```text
+   VUE_APP_BASE_API = 'http://localhost:9001'
+   ```
+
+4. 注释vue.config.js的跨域配置
+
+   ```javascr
+   // proxy: {
+   //   [process.env.VUE_APP_BASE_API]:{//后台服务器地址
+   //     target:"http://localhost:8001",
+   //     changeOrigin:true,
+   //     pathRewrite:{
+   //       ['^' + process.env.VUE_APP_BASE_API]:''
+   //     }
+   //   }
+   // },
+   ```
+
+5. 启动前端服务
+
+### 02-7、上传讲师头像前端实现
+
+1. 在添加讲师页面，创建element-ui组件，实现再实现上传功能
+
+   1. 从vue-element-admin复制以下两个组件到`components`：
+
+      vue-element-admin/src/components/ImageCropper
+
+      vue-element-admin/src/components/PanThumb
+
+   2. 添加element-ui组件
+
+      ```vue
+            <!-- 讲师头像 -->
+            <el-form-item label="讲师头像">
+              <!-- 头衔缩略图 -->
+              <pan-thumb :image="teacher.avatar" />
+              <!-- 文件上传按钮 -->
+              <el-button
+                type="primary"
+                icon="el-icon-upload"
+                @click="imagecropperShow = true"
+                >更换头像
+              </el-button>
+              <!--v-show：是否显示上传组件
+              :key：类似于id，如果一个页面多个图片上传控件，可以做区分
+              :url：后台上传的url地址
+              @close：关闭上传组件
+              @crop-upload-success：上传成功后的回调 -->
+              <image-cropper
+                v-show="imagecropperShow"
+                :width="300"
+                :height="300"
+                :key="imagecropperKey"
+                :url="BASE_API + '/eduoss/file-oss/upload'"
+                field="file"
+                @close="close"
+                @crop-upload-success="cropSuccess"
+              />
+            </el-form-item>
+      ```
+
+   3. data定义变量和初始值
+
+      ```javascript
+        data() {
+          return {
+            teacher: {},
+            saveBtnDisabled: false, //点击一次后按钮是否被禁用
+            imagecropperShow: false,//上传弹框的组件是否显示
+            imagecropperKey: 0, //上传key组件
+            BASE_API: process.env.VUE_APP_BASE_API,//获取den.development的地址
+          };
+        },
+      ```
+
+   4. 引入组件和声明组件
+
+      ```javascript
+      import ImageCropper from "@/components/ImageCropper"
+      import PanThumb from "@/components/PanThumb"
+      
+      export default {
+        components:{ImageCropper,PanThumb},
+      ```
+
+   5. 编写close和上传成功的方法
+
+      ```javascript
+          //关闭上传弹框的方法
+          close() {
+            this.imagecropperShow = false;
+            //上传组件初始化 弹框关闭时再次点击可以重新选择图片
+            this.imagecropperKey = this.imagecropperKey + 1;
+          },
+          //上传成功的方法
+          cropSuccess(data) {
+            this.close();
+            //上传之后接口返回图片地址,赋值给teacher.avatar
+            this.teacher.avatar = data.url;
+          },
+      ```
+
+# 六、后台管理系统-课程分类管理模块接口开发
+
+> 课程分类模块需求
+
+<img src="README.assets/image-20220106194134909.png" style="zoom: 80%;" />
+
+> 引入EasyExcel和poi依赖
+
+```xml
+<dependency>
+    <groupId>com.alibaba</groupId>
+    <artifactId>easyexcel</artifactId>
+    <version>2.1.1</version>
+</dependency>
+<!--xls-->
+<dependency>
+    <groupId>org.apache.poi</groupId>
+    <artifactId>poi</artifactId>
+    <version>3.17</version>
+</dependency>
+<!--xlsx-->
+<dependency>
+    <groupId>org.apache.poi</groupId>
+    <artifactId>poi-ooxml</artifactId>
+    <version>3.17</version>
+</dependency>
+```
+
+## 01、测试EasyExcel进行写操作
+
+1. 新建DemoData测试实体类
+
+   ```java
+   @Data
+   @AllArgsConstructor
+   @NoArgsConstructor
+   public class DemoData {
+   
+       //设置excel表头的名称
+       @ExcelProperty("学生编号")
+       private Integer sno;
+   
+       @ExcelProperty("学生姓名")
+       private String sname;
+   }
+   ```
+
+2. 新建测试类
+
+   ```java
+   public class TestEasyExcel {
+       @Test
+       public void test(){
+           //实现excel写的操作
+           String filename = "D:\\tmp\\excel\\write.xlsx";
+   
+           List<DemoData> list = new ArrayList<>();
+   
+           for (int i = 0; i < 10; i++) {
+               DemoData demoData = new DemoData(i, "lucy" + i);
+               list.add(demoData);
+           }
+           EasyExcel.write(filename, DemoData.class).sheet("学生列表").doWrite(list);
+       }
+   }
+   ```
+
+3. 运行结果
+
+   <img src="README.assets/image-20220106202829507.png" style="zoom:80%;" />
+
+## 02、测试EasyExcel进行读操作
+
+1. 新建实体类
+
+   ```java
+   @Data
+   @AllArgsConstructor
+   @NoArgsConstructor
+   public class DemoData {
+   
+       //设置excel表头的名称
+       @ExcelProperty(value = "学生编号",index = 0)
+       private Integer sno;
+   
+       @ExcelProperty(value = "学生姓名",index = 1)
+       private String sname;
+   }
+   ```
+
+2. 新建监听进行excel文件读取
+
+   ```java
+   public class ExcelListener extends AnalysisEventListener<DemoData> {
+   
+       //一行一行读取excel内容
+       @Override
+       public void invoke(DemoData demoData, AnalysisContext analysisContext) {
+           System.out.println("*****" + demoData);
+       }
+   
+       //读取表头的方法
+       public void invokeHeadMap(Map<Integer, String> headMap, AnalysisContext context) {
+           System.out.println("表头："+headMap);
+       }
+   
+       //读取完成之后执行方法
+       @Override
+       public void doAfterAllAnalysed(AnalysisContext analysisContext) {
+   
+       }
+   }
+   ```
+
+3. 创建测试方法
+
+   ```java
+   @Test
+   public void readTest(){
+       String filename = "D:\\tmp\\excel\\write.xlsx";
+       EasyExcel.read(filename, DemoData.class, new ExcelListener()).sheet().doRead();
+   }
+   ```
+
+4. 测试结果
+
+   <img src="README.assets/image-20220106204120475.png" style="zoom:80%;" />
 
 
 
 
-## 03、使用EasyExcel获取课程分类数据
 
 
 
-## 04、课程分类列表
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

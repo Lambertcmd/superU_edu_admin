@@ -33,6 +33,33 @@
         <el-input v-model="teacher.intro" :rows="10" type="textarea" />
       </el-form-item>
       <!-- 讲师头像 -->
+      <el-form-item label="讲师头像">
+        <!-- 头衔缩略图 -->
+        <pan-thumb :image="teacher.avatar" />
+        <!-- 文件上传按钮 -->
+        <el-button
+          type="primary"
+          icon="el-icon-upload"
+          @click="imagecropperShow = true"
+          >更换头像
+        </el-button>
+        <!--v-show：是否显示上传组件
+        :key：类似于id，如果一个页面多个图片上传控件，可以做区分
+        :url：后台上传的url地址
+        @close：关闭上传组件
+        @crop-upload-success：上传成功后的回调 -->
+        <image-cropper
+          v-show="imagecropperShow"
+          :width="300"
+          :height="300"
+          :key="imagecropperKey"
+          :url="BASE_API + '/eduoss/file-oss/upload'"
+          field="file"
+          @close="close"
+          @crop-upload-success="cropSuccess"
+        />
+      </el-form-item>
+
       <el-form-item>
         <el-button
           type="primary"
@@ -46,11 +73,19 @@
 </template>
 <script>
 import teacherApi from "@/api/edu/teacher";
+import ImageCropper from "@/components/ImageCropper";
+import PanThumb from "@/components/PanThumb";
 export default {
+  components: { ImageCropper, PanThumb },
   data() {
     return {
-      teacher: {},
+      teacher: {
+        avatar: "",
+      },
       saveBtnDisabled: false, //点击一次后按钮是否被禁用
+      imagecropperShow: false, //上传弹框的组件是否显示
+      imagecropperKey: 0, //上传key组件
+      BASE_API: process.env.VUE_APP_BASE_API, //获取den.development的地址
     };
   },
   created() {
@@ -75,6 +110,7 @@ export default {
        */
       //无id 添加
       if (!this.teacher.id) {
+        this.saveBtnDisabled = true;
         this.saveTeacher();
       } else {
         //有id 修改
@@ -104,6 +140,18 @@ export default {
         //2.返回讲师列表（路由跳转）
         this.$router.push({ path: "/teacher/table" });
       });
+    },
+    //关闭上传弹框的方法
+    close() {
+      this.imagecropperShow = false;
+      //上传组件初始化 弹框关闭时再次点击可以重新选择图片
+      this.imagecropperKey = this.imagecropperKey + 1;
+    },
+    //上传成功的方法
+    cropSuccess(data) {
+      this.close();
+      //上传之后接口返回图片地址,赋值给teacher.avatar
+      this.teacher.avatar = data.url;
     },
   },
 };
