@@ -66,6 +66,17 @@ export default {
             method: "post",
             data: teacher
         })
+    },
+
+    /**
+     * 查询所有讲师
+     * @returns 
+     */
+    findAllTeacher(){
+        return request({
+            url:"/eduservice/edu-teacher/findAll",
+            method:"get"
+        })
     }
 
 }

@@ -152,17 +152,16 @@ export default {
         confirmButtonText: "确定",
         cancelButtonText: "取消",
         type: "warning",
-      }).then(() => { //2.选择继续删除
+      }).then(() => {
+        //2.选择继续删除
         //3.调用删除记录的接口
-        teacher
-          .removeTeacherById(id)
-          .then((result) => {
-            //4.提示删除成功
-            this.$message({
-              type: "success",
-              message: "删除成功!",
-            });
-          })
+        teacher.removeTeacherById(id).then((result) => {
+          //4.提示删除成功
+          this.$message({
+            type: "success",
+            message: "删除成功!",
+          });
+        });
         //5.刷新页面
         this.getTeacherListPage();
       });

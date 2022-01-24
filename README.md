@@ -809,7 +809,7 @@ export function logout() {
 
    controller类上添加注解`@CrossOrigin`
 
-# 五、后台管理系统-前端页面实现
+# 五、后台管理系统-讲师管理模块前端页面实现
 
 ## 01、讲师CRUD功能前端实现
 
@@ -1898,6 +1898,19 @@ public String uploadFileAvatar(MultipartFile file) {
    }
    ```
 
+3. windows命令行启动nginx
+
+   ```shell
+   #后台启动
+   start nginx
+   #停止
+   nginx.exe -s stop
+   #重启
+   nginx.exe -s reload
+   ```
+
+   
+
 3. 前端修改代码`.env.development`
 
    ```text
@@ -2131,9 +2144,276 @@ public String uploadFileAvatar(MultipartFile file) {
 
    <img src="README.assets/image-20220106204120475.png" style="zoom:80%;" />
 
+## 03、Springboot整合EasyExcel实现课程导入
+
+### 03-1、entity
+
+```java
+package com.geek.eduservice.entity;
+
+@Data
+@TableName("edu_subject")
+@NoArgsConstructor
+@AllArgsConstructor
+@ApiModel(value = "EduSubject对象", description = "课程科目")
+public class EduSubject implements Serializable {
+
+    private static final long serialVersionUID = 1L;
+
+    @ApiModelProperty("课程类别ID")
+    private String id;
+
+    @ApiModelProperty("类别名称")
+    private String title;
+
+    @ApiModelProperty("父ID")
+    private String parentId;
+
+    @ApiModelProperty("排序字段")
+    private Integer sort;
+
+    @TableField(fill = FieldFill.INSERT)
+    @ApiModelProperty("创建时间")
+    private Date gmtCreate;
+
+    @TableField(fill = FieldFill.INSERT_UPDATE)
+    @ApiModelProperty("更新时间")
+    private Date gmtModified;
+
+}
+```
+
+### 03-2、mapper
+
+```java
+package com.geek.eduservice.mapper;
+
+public interface EduSubjectMapper extends BaseMapper<EduSubject> {
+
+}
+```
+
+### 03-3、service
+
+```java
+package com.geek.eduservice.service;
+
+public interface EduSubjectService extends IService<EduSubject> {
+
+    /**
+     * 从excel导入课程
+     * @param file
+     */
+    void saveSubject(MultipartFile file,EduSubjectService subjectService);
+}
+```
+
+实现
+
+```java
+package com.geek.eduservice.service.impl;
+
+@Service
+@Slf4j
+public class EduSubjectServiceImpl extends ServiceImpl<EduSubjectMapper, EduSubject> implements EduSubjectService {
+
+    @Override
+    public void saveSubject(MultipartFile file,EduSubjectService subjectService) {
+
+        try{
+            log.info("file:"+file.getOriginalFilename());
+            //1.获取文件输入流
+            InputStream inputStream = file.getInputStream();
+            //2.调用方法进行读取文件
+            EasyExcel.read(inputStream, SubjectData.class,new SubjectExcelListener(subjectService)).sheet("课程分类").doRead();
+        }catch(Exception e){
+            e.printStackTrace();
+        }
+
+    }
+}
+```
+
+### 03-4、listener
+
+```java
+package com.geek.eduservice.listener;
+
+@Slf4j
+@NoArgsConstructor
+@AllArgsConstructor
+public class SubjectExcelListener extends AnalysisEventListener<SubjectData> {
+
+    //由于SubjectExcelListener不能交给Spring进行管理的，不能注入其他对象
+    //不能通过Mapper来实现数据库操作，但是可以手动new一个listener并传入service
+    public EduSubjectService subjectService;
+
+    //每读取一行执行一次方法
+    @Override
+    public void invoke(SubjectData subjectData, AnalysisContext analysisContext) {
+        if (subjectData == null) {
+            throw new GuliException(20001, "文件数据为空");
+        }
+        //判断一级分类是否重复
+        String oneSubjectName = subjectData.getOneSubjectName();
+        EduSubject existOneSubject = existOneSubject(oneSubjectName);
+        //表里没有相同的一级分类,添加一级分类
+        if (existOneSubject == null) {
+            existOneSubject = new EduSubject();
+            existOneSubject.setParentId("0");
+            existOneSubject.setTitle(oneSubjectName);
+            subjectService.save(existOneSubject);
+        }
+        else {
+            log.info("一级分类" + oneSubjectName + "已存在");
+        }
+        //判断二级分类是否重复
+        String twoSubjectName = subjectData.getTwoSubjectName();
+        String parentId = existOneSubject.getId();
+        EduSubject existTwoSubject = existTwoSubject(twoSubjectName, parentId);
+        //表里没有相同的二级分类
+        if (existTwoSubject == null){
+            existTwoSubject = new EduSubject();
+            existTwoSubject.setParentId(parentId);
+            existTwoSubject.setTitle(twoSubjectName);
+            subjectService.save(existTwoSubject);
+        }else {
+            log.info("二级分类" + twoSubjectName + "已存在");
+        }
+    }
+
+    //判断一级分类不能重复添加
+    private EduSubject existOneSubject(String name) {
+        QueryWrapper<EduSubject> wrapper = new QueryWrapper<>();
+        wrapper.eq("title", name)
+                .eq("parent_id", "0");
+        EduSubject oneSubject = subjectService.getOne(wrapper);
+        return oneSubject;
+    }
+
+    //判断一级分类不能重复添加
+    private EduSubject existTwoSubject(String name,String parentId) {
+        QueryWrapper<EduSubject> wrapper = new QueryWrapper<>();
+        wrapper.eq("title", name)
+                .eq("parent_id", parentId);
+        EduSubject twoSubject = subjectService.getOne(wrapper);
+        return twoSubject;
+    }
+
+    //读取结束执行方法
+    @Override
+    public void doAfterAllAnalysed(AnalysisContext analysisContext) {
+
+    }
+}
+```
+
+### 03-5、controller
+
+```java
+package com.geek.eduservice.controller;
+
+@Api(tags = "课程管理")
+@RestController
+@CrossOrigin
+@RequestMapping("/eduservice/edu-subject")
+public class EduSubjectController {
+    @Autowired
+    private EduSubjectService subjectService;
+
+    @ApiOperation("添加课程")
+    @PostMapping("/addSubject")
+    public R addSubject(@RequestPart("file") MultipartFile file){
+        subjectService.saveSubject(file,subjectService);
+        return R.ok();
+    }
+
+}
+```
+
+> swagger上传excel文件测试
+
+# 七、后台管理系统-课程分类管理模块前端实现
+
+## 01、课程分类
+
+### 01-1、添加课程分类
+
+1. 添加课程分类路由
+
+   ```javascript
+     {
+       path: '/subject',
+       component: Layout,
+       redirect: '/subject/list',//访问/subject，路径自动重定向为/subject/list
+       name: '课程分类管理',
+       meta: { title: '课程分类管理', icon: 'el-icon-s-help' },//title：侧边栏标题，icon：标题旁边的图标
+       children: [
+         {
+           path: 'table',
+           name: '课程分类列表',
+           component: () => import('@/views/edu/subject/list'),//内容
+           meta: { title: '课程分类列表', icon: 'table' }
+         },
+         {
+           path: 'save',
+           name: '课程分类添加',
+           component: () => import('@/views/edu/subject/save'),
+           meta: { title: '课程分类添加', icon: 'tree' }
+         }
+       ]
+     },
+   ```
+
+   <img src="README.assets/image-20220110142753614.png" style="zoom:67%;" />
+
+2. views新建subject/list.vue(课程分类列表)和save.vue（课程分类添加）
+
+3. 添加课程分类页面
+
+   1. 添加上传组件
+
+
+# 八、后台管理系统-课程管理模块接口开发
+
+## 01、课程添加
+
+> 课程添加需求分析
+
+1. <img src="README.assets/image-20220123165000526.png" style="zoom:80%;" />
+
+2. ![](README.assets/image-20220123165143266.png)
+
+3. 课程最终发布：完成课程信息确认
+
+   ![](README.assets/image-20220123165350065.png)
+
+> 数据库分析
+
+- edu_course：课程表（存储课程基本信息）
+- edu_course_description:课程简介表（存储课程简介信息）
+- edu_chapter:课程章节表（存储课程章节信息）
+- edu_video:课程小节表（存储章节里的小节信息）
+- edu_teacher:讲师表
+- edu_subject:分类表
+
+![](README.assets/image-20220123194135559.png)
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+# 九、后台管理系-课程管理模块前端实现
 
 
 
