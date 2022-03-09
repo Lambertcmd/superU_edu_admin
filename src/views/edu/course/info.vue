@@ -33,7 +33,10 @@
           />
         </el-select>
         <!-- 二级分类 -->
-        <el-select v-model="courseInfo.subjectId" placeholder="二级分类">
+        <el-select
+          v-model="courseInfo.subjectId"
+          placeholder="二级分类"
+        >
           <el-option
             v-for="subject in secondSubjectList"
             :key="subject.id"
@@ -44,7 +47,10 @@
       </el-form-item>
       <!-- 课程讲师 -->
       <el-form-item label="课程讲师">
-        <el-select v-model="courseInfo.teacherId" placeholder="请选择">
+        <el-select
+          v-model="courseInfo.teacherId"
+          placeholder="请选择"
+        >
           <el-option
             v-for="teacher in teacherList"
             :key="teacher.id"
@@ -61,9 +67,12 @@
           placeholder="请填写课程的总课时数"
         />
       </el-form-item>
-      <!-- 课程简介 TODO -->
+      <!-- 课程简介-->
       <el-form-item label="课程简介">
-        <el-input v-model="courseInfo.description" placeholder="" />
+        <tinymce
+          :height="300"
+          v-model="courseInfo.description"
+        />
       </el-form-item>
       <!-- 课程封面-->
       <el-form-item label="课程封面">
@@ -98,8 +107,7 @@
           :disabled="saveBtnDisabled"
           type="primary"
           @click="saveOrUpdate"
-          >保存并下一步</el-button
-        >
+        >保存并下一步</el-button>
       </el-form-item>
     </el-form>
   </div>
@@ -108,7 +116,10 @@
 import course from "@/api/edu/course";
 import teacher from "@/api/edu/teacher";
 import subject from "@/api/edu/subject";
+import Tinymce from "@/components/Tinymce"; //引入富文本编辑器组件
 export default {
+  //声明富文本编辑器组件
+  components: { Tinymce },
   data() {
     return {
       saveBtnDisabled: false, // 保存按钮是否禁用
@@ -122,6 +133,7 @@ export default {
         cover: "Java.jpg",
         price: 0,
       },
+      courseId: "",
       teacherList: [],
       topSubjectList: [], //一级分类
       secondSubjectList: [], //二级分类
@@ -129,12 +141,42 @@ export default {
     };
   },
   created() {
-    console.log("info created");
+    //实现返回该页面实现数据回显
     //初始化所有讲师
     this.getListTeacher();
-    this.getAllSubject();
+    //获取路由id值
+    if (this.$route.params && this.$route.params.id) {
+      this.courseId = this.$route.params.id
+      //根据课程id查询课程基本信息
+      this.getCourseInfo()
+    } else {
+      //初始化一级分类
+      this.getAllSubject();
+    }
+    console.log("info created");
   },
   methods: {
+    //根据课程id查询课程基本信息
+    getCourseInfo() {
+      course.getCourseInfo(this.courseId).then((result) => {
+        this.courseInfo = result.data.courseInfoVo
+        //1.查询所有分类，包含一级和二级
+        subject.getAllSubject().then((result) => {
+          //2.获取所有一级分类
+          this.topSubjectList = result.data.list
+          //3.把所有一级分类的数组进行遍历，
+          for (var i = 0; i < this.topSubjectList.length; i++) {
+            //获取每个一级分类
+            var topSubject = this.topSubjectList[i]
+            //比较当前courseInfo里面一级分类id和所有一级分类id
+            if (this.courseInfo.subjectParentId == topSubject.id) {
+              //获取一级分类里面所有二级分类
+              this.secondSubjectList = topSubject.children
+            }
+          }
+        })
+      })
+    },
     //上传封面成功调用方法
     handleAvatarSuccess(res, file) {
       this.courseInfo.cover = res.data.url;
@@ -175,18 +217,49 @@ export default {
         this.teacherList = result.data.teacherList;
       });
     },
-    saveOrUpdate() {
-      course.addCourseInfo(this.courseInfo).then((result) => {
-        //提示信息
-        this.$message({
-          type: "success",
-          message: "添加课程信息成功！",
+    //添加课程
+    addCourse() {
+      course.addCourseInfo(this.courseInfo)
+        .then((result) => {
+          //提示信息
+          this.$message({
+            type: "success",
+            message: "添加课程信息成功！",
+          });
+          //跳转到第二步
+          console.log("next");
+          this.$router.push({ path: "/course/chapter/" + result.data.courseId });
         });
-        //跳转到第二步
-        console.log("next");
-        this.$router.push({ path: "/course/chapter/" + result.data.courseId });
-      });
+    },
+    //修改课程
+    updateCourse() {
+      course.updateCourseInfo(this.courseInfo)
+        .then((result) => {
+          //提示信息
+          this.$message({
+            type: "success",
+            message: "修改课程信息成功！",
+          });
+          //跳转到第二步
+          console.log("next");
+          this.$router.push({ path: "/course/chapter/" + this.courseId });
+        })
+    },
+    saveOrUpdate() {
+      //判断添加还是修改课程
+      if (!this.courseId) {
+        //添加
+        this.addCourse()
+      } else {
+        //修改
+        this.updateCourse()
+      }
     },
   },
 };
 </script>
+<style scoped>
+.tinymce-container {
+  line-height: 29px;
+}
+</style>

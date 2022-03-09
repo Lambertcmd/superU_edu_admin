@@ -14,9 +14,11 @@
     <el-form label-width="120px">
       <el-form-item>
         <el-button @click="previous">返回修改</el-button>
-        <el-button :disabled="saveBtnDisabled" type="primary" @click="publish"
-          >发布课程</el-button
-        >
+        <el-button
+          :disabled="saveBtnDisabled"
+          type="primary"
+          @click="publish"
+        >发布课程</el-button>
       </el-form-item>
     </el-form>
   </div>
@@ -26,15 +28,20 @@ export default {
   data() {
     return {
       saveBtnDisabled: false, // 保存按钮是否禁用
+      courseId: ""
     };
   },
   created() {
     console.log("publish created");
+    //获取路由的课程id值
+    if (this.$route.params && this.$route.params.id) {
+      this.courseId = this.$route.params.id;
+    }
   },
   methods: {
     previous() {
       console.log("previous");
-      this.$router.push({ path: "/course/chapter/1" });
+      this.$router.push({ path: "/course/chapter/"+this.courseId });
     },
     publish() {
       console.log("publish");

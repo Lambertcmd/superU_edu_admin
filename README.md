@@ -2415,6 +2415,33 @@ public class EduSubjectController {
 
 # 九、后台管理系-课程管理模块前端实现
 
+## 01、富文本编辑器实现课程简介
+
+1. 下载富文本组件：https://github.com/PanJiaChen/vue-element-admin/tree/master/src/components/Tinymce
+
+2. 将文件夹放入`src/components`
+
+3. 使用组件实现课程简介
+
+   ```vue
+   <!-- 课程简介-->
+   <el-form-item label="课程简介">
+       <tinymce :height="300" v-model="courseInfo.description" />
+   </el-form-item>
+   ```
+
+4. 添加样式
+
+   ```css
+   <style scoped>
+       .tinymce-container {
+       line-height: 29px;
+       }
+   </style>
+   ```
+
+   
+
 
 
 
