@@ -61,7 +61,7 @@
         </ul>
       </li>
     </ul>
-    <div>
+    <div class="centerButton">
       <el-button @click="previous">上一步</el-button>
       <el-button
         :disabled="saveBtnDisabled"
@@ -408,5 +408,8 @@ export default {
   line-height: 30px;
   width: 100%;
   border: 1px dotted #ddd;
+}
+.centerButton{
+  text-align: center;
 }
 </style>
