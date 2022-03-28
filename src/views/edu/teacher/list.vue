@@ -9,12 +9,24 @@
         style="text-align: center"
       >
         <el-form-item label="讲师名">
-          <el-input v-model="teacherQuery.name" placeholder="讲师名"></el-input>
+          <el-input
+            v-model="teacherQuery.name"
+            placeholder="讲师名"
+          ></el-input>
         </el-form-item>
         <el-form-item label="讲师头衔">
-          <el-select v-model="teacherQuery.level" placeholder="讲师头衔">
-            <el-option label="高级讲师" value="1"></el-option>
-            <el-option label="首席讲师" value="2"></el-option>
+          <el-select
+            v-model="teacherQuery.level"
+            placeholder="讲师头衔"
+          >
+            <el-option
+              label="高级讲师"
+              value="1"
+            ></el-option>
+            <el-option
+              label="首席讲师"
+              value="2"
+            ></el-option>
           </el-select>
         </el-form-item>
         <el-form-item label="添加时间">
@@ -36,10 +48,14 @@
           />
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" @click="getTeacherListPage()"
-            >查询</el-button
-          >
-          <el-button type="default" @click="resetData()">清空</el-button>
+          <el-button
+            type="primary"
+            @click="getTeacherListPage()"
+          >查询</el-button>
+          <el-button
+            type="default"
+            @click="resetData()"
+          >清空</el-button>
         </el-form-item>
       </el-form>
     </template>
@@ -52,33 +68,61 @@
       fit
       highlight-current-row
     >
-      <el-table-column label="序号" width="70" align="center">
+      <el-table-column
+        label="序号"
+        width="70"
+        align="center"
+      >
         <template slot-scope="scope">
           {{ (page - 1) * size + scope.$index + 1 }}
         </template>
       </el-table-column>
-      <el-table-column width="80" prop="name" label="名称" />
-      <el-table-column label="头衔" width="80">
+      <el-table-column
+        width="80"
+        prop="name"
+        label="名称"
+      />
+      <el-table-column
+        label="头衔"
+        width="80"
+      >
         <template slot-scope="scope">
           {{ scope.row.level === 1 ? "高级讲师" : "首席讲师" }}
         </template>
       </el-table-column>
-      <el-table-column prop="intro" label="资历" />
-      <el-table-column prop="gmtCreate" label="添加时间" width="160" />
-      <el-table-column prop="sort" label="排序" width="60" />
-      <el-table-column label="操作" width="200" align="center">
+      <el-table-column
+        prop="intro"
+        label="资历"
+      />
+      <el-table-column
+        prop="gmtCreate"
+        label="添加时间"
+        width="160"
+      />
+      <el-table-column
+        prop="sort"
+        label="排序"
+        width="60"
+      />
+      <el-table-column
+        label="操作"
+        width="200"
+        align="center"
+      >
         <template slot-scope="scope">
           <router-link :to="'/teacher/edit/' + scope.row.id">
-            <el-button type="primary" size="mini" icon="el-icon-edit"
-              >修改</el-button
-            >
+            <el-button
+              type="primary"
+              size="mini"
+              icon="el-icon-edit"
+            >修改</el-button>
           </router-link>
           <el-button
             type="danger"
             size="mini"
             icon="el-icon-delete"
             @click="removeTeacherById(scope.row.id)"
-            >删除
+          >删除
           </el-button>
         </template>
       </el-table-column>
@@ -161,9 +205,9 @@ export default {
             type: "success",
             message: "删除成功!",
           });
+          //5.刷新页面
+          this.getTeacherListPage();
         });
-        //5.刷新页面
-        this.getTeacherListPage();
       });
     },
   },

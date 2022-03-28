@@ -2413,7 +2413,7 @@ public class EduSubjectController {
 
 
 
-# 九、后台管理系-课程管理模块前端实现
+# 九、后台管理系统-课程管理模块前端实现
 
 ## 01、富文本编辑器实现课程简介
 
@@ -2440,7 +2440,389 @@ public class EduSubjectController {
    </style>
    ```
 
+
+# 十、前台系统-单点登录
+
+## 1、单点登录——SSO(single sign on)模式
+
+<img src="README.assets/image-20220328200410813.png" alt="image-20220328200410813" style="zoom:67%;" />
+
+单点登录三种常见方式
+
+1. session广播机制实现（每个模块进行session复制）
+
+2. 使用cookie + redis实现：
+
+   <img src="README.assets/image-20220328201135220.png" alt="image-20220328201135220" style="zoom: 67%;" />
+
+3. 使用token实现：
+
+   token是按照一定规则生成的字符串，字符串中可以包含用户信息
+
+   <img src="README.assets/image-20220328201728622.png" alt="image-20220328201728622" style="zoom: 67%;" />
+
+## 2、JWT
+
+### 2-1、JWT的结构
+
+JWT:token是按照一定规则生成的字符串，包含用户信息，一般采用JWT规则，使用JWT规则可以生成字符串，包含用户信息
+
+<img src="README.assets/image-20220328202407870.png" alt="image-20220328202407870" style="zoom:50%;" />
+
+JWT生成的字符串包含三部分（三种不同的颜色）
+
+1. jwt头信息
+
+   ```json
+   {
+       "alg": "HS256",
+       "typ": "JWT"
+   }
+   ```
+
+2. 有效载荷 包含主体信息（用户信息）,是JWT的主体内容部分，也是一个JSON对象，包含需要传递的数据。 JWT指定七个默认 字段供选择。
+
+   ```json
+   iss：发行人
+   exp：到期时间
+   sub：主题
+   aud：用户
+   nbf：在此之前不可用
+   iat：发布时间
+   jti：JWT ID用于标识该JWT
+   ```
+
+   除以上默认字段外，我们还可以自定义私有字段，如下例：
+
+   ```json
+   {
+       "sub": "1234567890",
+       "name": "Helen",
+       "admin": true
+   }
+   ```
+
+3. 签名哈希（防伪标志）
+
+### 2-2、整合JWT
+
+1. 引入依赖
+
+   ```xml
+   <!-- JWT-->
+   <dependency>
+       <groupId>io.jsonwebtoken</groupId>
+       <artifactId>jjwt</artifactId>
+   </dependency>
+   ```
+
+2. 创建JWT工具类
+
+   ```java
+   package com.geek.commonutils;
    
+   import io.jsonwebtoken.Claims;
+   import io.jsonwebtoken.Jws;
+   import io.jsonwebtoken.Jwts;
+   import io.jsonwebtoken.SignatureAlgorithm;
+   import org.springframework.http.server.reactive.ServerHttpRequest;
+   import org.springframework.util.StringUtils;
+   
+   import javax.servlet.http.HttpServletRequest;
+   import java.util.Date;
+   
+   /**
+    * @ClassName JwtUtils
+    * @Description TODO
+    * @Author Lambert
+    * @Date 2022/3/28 20:35
+    * @Version 1.0
+    **/
+   public class JwtUtils {
+   
+       public static final long EXPIRE = 1000 * 60 * 60 * 24;//token过期时间
+       public static final String APP_SECRET = "ukc8BDbRigUDaY6pZFfWus2jZWLPHO";//密钥 用于加密编码
+   
+       /**
+        * 生成token字符串的方法
+        * @param id
+        * @param nickname
+        * @return
+        */
+       public static String getJwtToken(String id, String nickname){
+   
+           String JwtToken = Jwts.builder()
+                   //设置token头信息
+                   .setHeaderParam("typ", "JWT")
+                   .setHeaderParam("alg", "HS256")
+                   //设置token过期时间
+                   .setSubject("guli-user")
+                   .setIssuedAt(new Date())
+                   .setExpiration(new Date(System.currentTimeMillis() + EXPIRE))
+                   //设置token的主体部分 存储用户信息
+                   .claim("id", id)
+                   .claim("nickname", nickname)
+                   //签名哈希
+                   .signWith(SignatureAlgorithm.HS256, APP_SECRET)
+                   .compact();
+           return JwtToken;
+       }
+   
+       /**
+        * 判断token是否存在与有效
+        * @param jwtToken
+        * @return
+        */
+       public static boolean checkToken(String jwtToken) {
+           if(StringUtils.isEmpty(jwtToken)) return false;
+           try {
+               Jwts.parser().setSigningKey(APP_SECRET).parseClaimsJws(jwtToken);
+           } catch (Exception e) {
+               e.printStackTrace();
+               return false;
+           }
+           return true;
+       }
+   
+       /**
+        * 判断token是否存在与有效
+        * @param request
+        * @return
+        */
+       public static boolean checkToken(HttpServletRequest request) {
+           try {
+               String jwtToken = request.getHeader("token");
+               if(StringUtils.isEmpty(jwtToken)) return false;
+               Jwts.parser().setSigningKey(APP_SECRET).parseClaimsJws(jwtToken);
+           } catch (Exception e) {
+               e.printStackTrace();
+               return false;
+           }
+           return true;
+       }
+   
+       /**
+        * 根据token获取会员id
+        * @param request
+        * @return
+        */
+       public static String getMemberIdByJwtToken(HttpServletRequest request) {
+           String jwtToken = request.getHeader("token");
+           if(StringUtils.isEmpty(jwtToken)) return "";
+           Jws<Claims> claimsJws = Jwts.parser().setSigningKey(APP_SECRET).parseClaimsJws(jwtToken);
+           Claims claims = claimsJws.getBody();
+           return (String)claims.get("id");
+       }
+   }
+   ```
+
+## 3、阿里云短信服务
+
+> 整合阿里云短信服务，实现注册发送短信验证码
+
+1. 首先进入阿里云短信服务开通服务：https://dysms.console.aliyun.com/overview
+2. 申请签名
+3. 申请模板
+
+### 3-1、整合阿里云短信服务
+
+1. 引入相关依赖
+
+   ```xml
+   <dependencies>
+       <dependency>
+           <groupId>com.alibaba</groupId>
+           <artifactId>fastjson</artifactId>
+           <version>1.2.28</version>
+       </dependency>
+   	<dependency>
+           <groupId>com.aliyun</groupId>
+           <artifactId>aliyun-java-sdk-core</artifactId>
+           <version>4.3.3</version>
+       </dependency>
+   </dependencies>
+   ```
+
+2. 添加随机数工具类
+
+   ```java
+   package com.geek.edumsm.utils;
+   
+   import java.text.DecimalFormat;
+   import java.util.ArrayList;
+   import java.util.HashMap;
+   import java.util.List;
+   import java.util.Random;
+   
+   /**
+    * 获取随机数
+    * 
+    * @author qianyi
+    *
+    */
+   public class RandomUtil {
+   
+   	private static final Random random = new Random();
+   
+   	private static final DecimalFormat fourdf = new DecimalFormat("0000");
+   
+   	private static final DecimalFormat sixdf = new DecimalFormat("000000");
+   
+   	/**
+   	 * 生成4位随机数字
+   	 * @return
+   	 */
+   	public static String getFourBitRandom() {
+   		return fourdf.format(random.nextInt(10000));
+   	}
+   
+   	/**
+   	 * 生成6位随机数字
+   	 * @return
+   	 */
+   	public static String getSixBitRandom() {
+   		return sixdf.format(random.nextInt(1000000));
+   	}
+   
+   	/**
+   	 * 给定数组，抽取n个数据
+   	 * @param list
+   	 * @param n
+   	 * @return
+   	 */
+   	public static ArrayList getRandom(List list, int n) {
+   
+   		Random random = new Random();
+   
+   		HashMap<Object, Object> hashMap = new HashMap<Object, Object>();
+   
+   		// 生成随机数字并存入HashMap
+   		for (int i = 0; i < list.size(); i++) {
+   
+   			int number = random.nextInt(100) + 1;
+   
+   			hashMap.put(number, i);
+   		}
+   
+   		// 从HashMap导入数组
+   		Object[] robjs = hashMap.values().toArray();
+   
+   		ArrayList r = new ArrayList();
+   
+   		// 遍历数组并打印数据
+   		for (int i = 0; i < n; i++) {
+   			r.add(list.get((int) robjs[i]));
+   			System.out.print(list.get((int) robjs[i]) + "\t");
+   		}
+   		System.out.print("\n");
+   		return r;
+   	}
+   }
+   ```
+
+3. Controller
+
+   ```java
+   @RestController
+   @RequestMapping("/edumsm/msm")
+   @Slf4j
+   @Api(tags = "阿里云短信服务")
+   @CrossOrigin
+   public class MsmController {
+   
+       @Autowired
+       private MsmService msmService;
+   
+       @Autowired
+       private RedisUtils redisUtils;
+   
+   
+       /**
+        * 发送手机验证码
+        *
+        * @param phone
+        * @return
+        */
+       @ApiOperation("发送手机验证码")
+       @GetMapping("send/{phone}")
+       public R sendMsm(@PathVariable("phone") String phone) {
+           if (StringUtils.isEmpty(phone)) {
+               return R.error().message("手机号码为空");
+           }
+           //生成6位随机值，传递给短信服务发送
+           String code = RandomUtil.getSixBitRandom();
+           //调用service发送短信的方法
+           boolean isSend = msmService.send(phone, code);
+           if (isSend) {
+               //设置验证码有效时间5分钟
+               redisUtils.set(phone, code, 5, TimeUnit.MINUTES);
+               return R.ok();
+           } else {
+               return R.error().message("短信发送出错");
+           }
+       }
+   }
+   ```
+
+4. Service
+
+   ```java
+   @Service
+   public class MsmServiceImpl implements MsmService {
+   
+   
+       @Override
+       public boolean send(String phone,String code) {
+   
+           Map<String, Object> param = new HashMap<>();
+           param.put("code", code);
+           try {
+               DefaultProfile profile =
+                       DefaultProfile.getProfile("default", "your accessKeyId", "your secret");
+               IAcsClient client = new DefaultAcsClient(profile);
+   
+               //设置相关固定参数
+               CommonRequest request = new CommonRequest();
+               //request.setProtocol(ProtocolType.HTTPS);
+               request.setMethod(MethodType.POST);
+               request.setDomain("dysmsapi.aliyuncs.com");
+               request.setVersion("2017-05-25");
+               request.setAction("SendSms");
+   
+               //设置发送的相关参数
+               request.putQueryParameter("PhoneNumbers", phone);//手机号
+               request.putQueryParameter("SignName", "深圳技师学院茶艺社");//阿里云申请的签名名称
+               request.putQueryParameter("TemplateCode", "SMS_204127522");//阿里云申请的模板Code
+               request.putQueryParameter("TemplateParam", JSONObject.toJSONString(param));//验证码数据，需要用json数据传递
+               //最终发送
+               CommonResponse response = client.getCommonResponse(request);
+               //是否发送成功
+               if (!response.getHttpResponse().isSuccess()) {
+                   return false;
+               }
+           } catch (ClientException e) {
+               e.printStackTrace();
+           }
+           return true;
+       }
+   }
+   ```
+
+> 踩坑：配置类实例的RedisTemplate的泛型和工具类实例的RedisTemplate的泛型必须相同
+
+<img src="README.assets/image-20220329012705859.png" alt="image-20220329012705859" style="zoom:50%;" />
+
+
+
+
+
+<img src="README.assets/image-20220329012731271.png" alt="image-20220329012731271" style="zoom:50%;" />
+
+
+
+
+
+
 
 
 

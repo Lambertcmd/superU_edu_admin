@@ -39,11 +39,29 @@ export default {
         })
     },
 
+    /**
+     * 修改小节信息
+     * @param {*} video 
+     * @returns 
+     */
     updateVideo(video) {
         return request({
             url: `/eduservice/edu-video/updateVideo`,
             method: "POST",
             data: video
         })
+    },
+
+    /**
+     * 根据云端视频id删除视频
+     * @param {*} videoSourceId 
+     * @returns 
+     */
+    removeVideoSourceById(videoSourceId) {
+        return request({
+            url: `/eduvod/video/removeVideoSourceById/${videoSourceId}`,
+            method: "DELETE"
+        })
     }
+
 }
