@@ -200,6 +200,7 @@ export default {
         //2.选择继续删除
         //3.调用删除记录的接口
         teacher.removeTeacherById(id).then((result) => {
+          // console.log(result.data.message)
           //4.提示删除成功
           this.$message({
             type: "success",
@@ -207,6 +208,8 @@ export default {
           });
           //5.刷新页面
           this.getTeacherListPage();
+        }).catch((err) => {
+          console.log(err)
         });
       });
     },

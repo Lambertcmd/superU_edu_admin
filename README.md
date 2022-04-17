@@ -2441,7 +2441,7 @@ public class EduSubjectController {
    ```
 
 
-# 十、前台系统-单点登录
+# 十、前台系统-登录功能
 
 ## 1、单点登录——SSO(single sign on)模式
 
@@ -2459,7 +2459,7 @@ public class EduSubjectController {
 
    token是按照一定规则生成的字符串，字符串中可以包含用户信息
 
-   <img src="README.assets/image-20220328201728622.png" alt="image-20220328201728622" style="zoom: 67%;" />
+   <img src="README.assets/image-20220328201728622.png" alt="image-20220328201728622" style="zoom: 67%;" />、
 
 ## 2、JWT
 
@@ -2646,7 +2646,7 @@ JWT生成的字符串包含三部分（三种不同的颜色）
 2. 添加随机数工具类
 
    ```java
-   package com.geek.edumsm.utils;
+   package com.geek.commonutils;
    
    import java.text.DecimalFormat;
    import java.util.ArrayList;
@@ -2820,15 +2820,986 @@ JWT生成的字符串包含三部分（三种不同的颜色）
 
 
 
+## 4、使用token实现单点登录
+
+### 4-1、初步后端接口实现
+
+
+
+1. yml配置
+
+   ```yaml
+   server:
+     port: 8006 #服务端口
+   
+   spring:
+     application:
+       name: service-ucenter #服务名
+     datasource:
+       driver-class-name: com.mysql.cj.jdbc.Driver  # mysql数据库链接
+       url: jdbc:mysql://localhost:3306/guli_edu?serverTimezone=GMT%2B8
+       username: root
+       password: 123456
+     cloud:
+       nacos:
+         discovery:
+           server-addr: localhost:8848 #配置nacos服务地址
+     jackson:
+       date-format: =yyyy-MM-dd HH:mm:ss #返回json的全局时间格式
+       time-zone: GMT+8
+     redis:
+       host: 192.168.9.130 #Redis服务器地址
+       port: 6379          #Redis服务器连接端口
+       database: 0         #Redis数据库索引（默认为0）
+       timeout: 1800000    #连接超时时间（毫秒）
+       lettuce:
+         pool:
+           max-active: 20  #连接池最大连接数（使用负值表示没有限制）
+           max-wait: -1    #最大阻塞等待时间(负数表示没限制)
+           max-idle: 5     #连接池中的最大空闲连接
+           min-idle: 0     #连接池中的最小空闲连接
+   
+   mybatis-plus:
+     mapper-locations: classpath:com/geek/educenter/mapper/xml/*.xml # 配置mapper xml文件的路径
+     configuration:
+       log-impl: org.apache.ibatis.logging.stdout.StdOutImpl # mybatis日志
+   logging:
+     level:
+       com.alibaba.nacos.client.naming: WARN
+       com.alibaba.nacos.client.config.impl: WARN
+   
+   ```
+
+2. 实体UcenterMember
+
+   ```java
+   @Getter
+   @Setter
+   @TableName("ucenter_member")
+   @ApiModel(value = "UcenterMember对象", description = "会员表")
+   public class UcenterMember implements Serializable {
+   
+       private static final long serialVersionUID = 1L;
+   
+       @ApiModelProperty("会员id")
+       private String id;
+   
+       @ApiModelProperty("微信openid")
+       private String openid;
+   
+       @ApiModelProperty("手机号")
+       private String mobile;
+   
+       @ApiModelProperty("密码")
+       private String password;
+   
+       @ApiModelProperty("昵称")
+       private String nickname;
+   
+       @ApiModelProperty("性别 1 女，2 男")
+       private Integer sex;
+   
+       @ApiModelProperty("年龄")
+       private Integer age;
+   
+       @ApiModelProperty("用户头像")
+       private String avatar;
+   
+       @ApiModelProperty("用户签名")
+       private String sign;
+   
+       @ApiModelProperty("是否禁用 1（true）已禁用，  0（false）未禁用")
+       private Boolean isDisabled;
+   
+       @ApiModelProperty("逻辑删除 1（true）已删除， 0（false）未删除")
+       private Boolean isDeleted;
+   
+       @ApiModelProperty("创建时间")
+       private Date gmtCreate;
+   
+       @ApiModelProperty("更新时间")
+       private Date gmtModified;
+   
+   
+   }
+   ```
+
+3. 前端控制器UcenterMemberController
+
+   ```java
+   @CrossOrigin
+   @RestController
+   @Slf4j
+   @Api("用户模块")
+   @RequestMapping("/educenter/member")
+   public class UcenterMemberController {
+   
+       @Autowired
+       private UcenterMemberService memberService;
+   
+   
+       @ApiOperation("用户登录")
+       @PostMapping("login")
+       public R loginUser(@RequestBody UcenterMember member){
+           //返回token值，使用jwt生成token
+           String token = memberService.login(member);
+           return R.ok().data("token",token);
+       }
+   }
+   ```
+
+4. 业务逻辑UcenterMemberService以及实现类
+
+   ```java
+   public interface UcenterMemberService extends IService<UcenterMember> {
+   
+       /**
+        * 用户登录
+        * @param member
+        * @return
+        */
+       String login(UcenterMember member);
+   }
+   
+   ```
+
+   ```java
+   @Service
+   public class UcenterMemberServiceImpl extends ServiceImpl<UcenterMemberMapper, UcenterMember> implements UcenterMemberService {
+   
+       public String login(UcenterMember member) {
+           //获取登录用户的手机号和密码
+           String mobile = member.getMobile();
+           String password = member.getPassword();
+           //手机号和密码非空判断
+           if (StringUtils.isBlank(mobile) || StringUtils.isBlank(password)) {
+               throw new GuliException(20001, "手机号或密码为空");
+           }
+           //判断手机号是否正确
+           QueryWrapper<UcenterMember> mobileQueryWrapper = new QueryWrapper<>();
+           mobileQueryWrapper.eq("mobile", mobile);
+           UcenterMember mobileMember = baseMapper.selectOne(mobileQueryWrapper);
+           if (mobileMember == null) {
+               throw new GuliException(20001, "手机号不存在");
+           }
+   
+           //判断密码是否正确
+           if (!StringUtils.equals(mobileMember.getPassword(),password)){
+               throw new GuliException(20001, "用户密码错误");
+           }
+   
+           //判断用户是否禁用
+           if (mobileMember.getIsDisabled()){
+               throw new GuliException(20001, "用户被禁用");
+           }
+   
+           //登录成功
+           //使用jwt工具类 生成token字符串
+           String jwtToken = JwtUtils.getJwtToken(mobileMember.getId(), mobileMember.getNickname());
+           return jwtToken;
+       }
+   }
+   ```
+
+### 4-2、使用MD5对密码进行加密
+
+1. 引入MD5加密工具类
+
+   ```java
+   package com.geek.commonutils;
+   
+   import java.security.MessageDigest;
+   import java.security.NoSuchAlgorithmException;
+   
+   
+   public final class MD5 {
+   
+       public static String encrypt(String strSrc) {
+           try {
+               char hexChars[] = { '0', '1', '2', '3', '4', '5', '6', '7', '8',
+                       '9', 'a', 'b', 'c', 'd', 'e', 'f' };
+               byte[] bytes = strSrc.getBytes();
+               MessageDigest md = MessageDigest.getInstance("MD5");
+               md.update(bytes);
+               bytes = md.digest();
+               int j = bytes.length;
+               char[] chars = new char[j * 2];
+               int k = 0;
+               for (int i = 0; i < bytes.length; i++) {
+                   byte b = bytes[i];
+                   chars[k++] = hexChars[b >>> 4 & 0xf];
+                   chars[k++] = hexChars[b & 0xf];
+               }
+               return new String(chars);
+           } catch (NoSuchAlgorithmException e) {
+               e.printStackTrace();
+               throw new RuntimeException("MD5加密出错！！+" + e);
+           }
+       }
+   
+       public static void main(String[] args) {
+           System.out.println(MD5.encrypt("111111"));
+       }
+   
+   }
+   ```
+
+2. 修改业务逻辑
+
+   ```java
+   //判断密码是否正确
+   //由于存储到数据库的密码必须加密，需要将输入的密码进行加密，再和数据库密码进行比较
+   //加密方式采用MD5(MD5加密算法不可逆)
+   if (!StringUtils.equals(MD5.encrypt(password),mobileMember.getPassword())){
+       throw new GuliException(20001, "用户密码错误");
+   }
+   ```
+
+## 5、用户注册
+
+1. 前端控制器
+
+   ```java
+   @ApiOperation("用户注册")
+   @PostMapping("register")
+   public R registerUser(@RequestBody @Valid RegisterVo registerVo){
+       memberService.register(registerVo);
+       return R.ok();
+   }
+   ```
+
+2. 业务逻辑及其实现类
+
+   ```java
+   /**
+    * 用户注册
+    * @param registerVo
+   */
+   void register(RegisterVo registerVo);
+   ```
+
+   ```java
+   @Override
+   public void register(RegisterVo registerVo) {
+       //获取注册信息
+       String code = registerVo.getCode();//验证码
+       String mobile = registerVo.getMobile();//手机号码
+       String nickname = registerVo.getNickname();//昵称
+       String password = MD5.encrypt(registerVo.getPassword());//密码加密
+   
+       //判断redis的验证码和用户输入的验证码是否一致
+       String redisCode = (String) redisUtils.get(mobile);
+       if (StringUtils.isBlank(redisCode)){
+           throw new GuliException(20001, "验证码已过期");
+       }else if (!StringUtils.equals(code, redisCode)){
+           throw new GuliException(20001, "验证码不正确");
+       }
+   
+       //判断手机号是否重复
+       QueryWrapper<UcenterMember> queryWrapper = new QueryWrapper<>();
+       queryWrapper.eq("mobile", mobile);
+       Long count = baseMapper.selectCount(queryWrapper);
+       //表里有重复的手机号
+       if (count > 0) {
+           throw new GuliException(20001, "该手机号已被注册");
+       }
+   
+       //以上都没问题可以注册账户了
+       UcenterMember member = new UcenterMember();
+       BeanUtils.copyProperties(registerVo, member);
+       member.setPassword(password);
+       member.setAvatar("https://guli-file--upload.oss-cn-shenzhen.aliyuncs.com/" +
+                        "2022/01/06/87530d443bbc446988bdf9033e63d84bfile.png");
+       baseMapper.insert(member);
+   }
+   ```
+
+## 6、通过token获取用户信息
+
+1. 前端控制器
+
+   ```java
+   @ApiOperation("根据token获取用户信息")
+   @GetMapping("getMemberInfo")
+   public R getMemberInfo(HttpServletRequest request){
+       //调用jwt工具类  根据头信息的token获取用户Id
+       String memberId = JwtUtils.getMemberIdByJwtToken(request);
+       //根据用户id查询用户
+       UcenterMember member = memberService.getById(memberId);
+       return R.ok().data("userInfo",member);
+   }
+   ```
+
+## 7、微信扫码登录
+
+0Auth2是针对特定问题一种解决方案
+
+OAuth2主要可以解决两个问题
+
+1. 开放系统间授权
+
+   照片拥有者想要在云冲印服务上打印照片，云冲印服务需要访问云存储服务上的资源,需要照片拥有者的授权
+
+   <img src="README.assets/image-20220415111601777.png" alt="image-20220415111601777" style="zoom: 67%;" /> 
+
+2. 分布式访问问题
+
+### 7-1、OAuth2-开放系统间授权
+
+#### 7-1-1、方式一：用户名密码复制
+
+适用于同一公司内部的多个系统，不适用于不受信的第三方应用
+
+
+
+<img src="README.assets/image-20220415111846030.png" alt="image-20220415111846030" style="zoom: 67%;" /> 
+
+#### 7-1-2、方式二：通用开发者key
+
+适用于合作商或者授信的不同业务部门之间
+
+<img src="README.assets/image-20220415111905345.png" alt="image-20220415111905345" style="zoom: 67%;" /> 
+
+#### 7-1-3、方式三：令牌机制
+
+接近OAuth2方式，需要考虑如何管理令牌、颁发令牌、吊销令牌，需要统一的协议，因此就有了OAuth2协议
+
+<img src="README.assets/image-20220415111942012.png" alt="image-20220415111942012" style="zoom:67%;" /> 
+
+### 7-2、OAuth2-分布式访问(单点登录)
+
+> 除了开放系统授权，OAuth2还可以应用于现代微服务安全
+
+1. 传统单块应用的安全
+
+   <img src="README.assets/image-20220415112604573.png" alt="image-20220415112604573" style="zoom:67%;" /> 
+
+2. 现代微服务安全
+
+   现代微服务中系统微服务化以及应用的形态和设备类型增多，不能用传统的登录方式
+   核心的技术不是用户名和密码，而是**token**，**由AuthServer颁发token，用户使用token进行登录**
+
+   <img src="README.assets/image-20220415112640916.png" alt="image-20220415112640916" style="zoom:67%;" /> 
+
+3. 典型的OAuth2应用
+
+   <img src="README.assets/image-20220415113154682.png" alt="image-20220415113154682" style="zoom:67%;" /> 
+
+4. 总结
+
+   <img src="README.assets/image-20220415113218222.png" alt="image-20220415113218222" style="zoom:67%;" /> 
+
+5. **OAuth2是一种解决方案**
+
+   <img src="README.assets/image-20220415113333959.png" alt="image-20220415113333959" style="zoom: 80%;" />
+
+6. OAuth2的主要角色
+
+   <img src="README.assets/image-20220415113521576.png" alt="image-20220415113521576" style="zoom:80%;" /> 
+
+### 7-3、微信扫码授权登录(生成二维码)
+
+1. 准备工作
+   https://open.weixin.qq.com
+
+   1. 注册
+
+   2. 邮箱激活
+
+   3. 完善开发者资料
+
+   4. 开发者资质认证
+
+      准备营业执照，1-2个工作日审批、300元
+
+   5. 创建网站应用
+      提交审核，7个工作日审批
+
+   6. 熟悉微信登录流程
+      参考文档：https://open.weixin.qq.com/cgi-bin/showdocument?action=dir_list&t=resource/res_list&verify=1&id=open1419316505&token=e547653f995d8f402704d5cb2945177dc8aa4e7e&lang=zh_CN
+
+      获取access_token时序图
+
+   <img src="README.assets/image-20220415124620738.png" alt="image-20220415124620738" style="zoom:67%;" /> 
+
+2. 后端开发
+
+   1. application.properties添加相关配置信息
+
+      ```properties
+      # 微信开放平台 appid
+      wx.open.app_id=你的appid
+      # 微信开放平台 appsecret
+      wx.open.app_secret=你的appsecret
+      # 微信开放平台 重定向url
+      wx.open.redirect_url=http://你的服务器名称/api/ucenter/wx/callback
+      ```
+
+   2. 创建常量类
+      创建util包，创建ConstantPropertiesUtil.java常量类
+
+      ```java
+      package com.guli.ucenter.util;
+      @Component
+      //@PropertySource("classpath:application.properties")
+      public class ConstantPropertiesUtil implements InitializingBean {
+      	@Value("${wx.open.app_id}")
+      	private String appId;
+          
+          @Value("${wx.open.app_secret}")
+          private String appSecret;
+          
+          @Value("${wx.open.redirect_url}")
+          private String redirectUrl;
+          
+          public static String WX_OPEN_APP_ID;
+          public static String WX_OPEN_APP_SECRET;
+          public static String WX_OPEN_REDIRECT_URL;
+          
+          @Override
+          public void afterPropertiesSet() throws Exception {
+          WX_OPEN_APP_ID = appId;
+          WX_OPEN_APP_SECRET = appSecret;
+          WX_OPEN_REDIRECT_URL = redirectUrl;
+      	}
+      }
+      ```
+
+   3. 创建controller
+
+      ucenter微服务中创建api包
+      api包中创建WxApiController
+
+      ```java
+      package com.guli.ucenter.controller.api;
+      
+      @CrossOrigin
+      @Controller//注意这里没有配置 @RestController
+      @RequestMapping("/api/ucenter/wx")
+      public class WxApiController {
+          
+      	@GetMapping("login")
+      	public String genQrConnect(HttpSession session) {
+          
+              // 微信开放平台授权baseUrl
+              String baseUrl = "https://open.weixin.qq.com/connect/qrconnect" +
+                      "?appid=%s" +
+                      "&redirect_uri=%s" +
+                      "&response_type=code" +
+                      "&scope=snsapi_login" +
+                      "&state=%s" +
+                      "#wechat_redirect";
+      
+              // 回调地址
+              String redirectUrl = ConstantPropertiesUtil.WX_OPEN_REDIRECT_URL; //获取业务服务器重定向地址
+              try {
+                  redirectUrl = URLEncoder.encode(redirectUrl, "UTF-8"); //url编码
+              } catch (UnsupportedEncodingException e) {
+                  throw new GuliException(20001, e.getMessage());
+              }
+      
+              // 防止csrf攻击（跨站请求伪造攻击）
+              //String state = UUID.randomUUID().toString().replaceAll("-", "");//一般情况下会使用一个随机数
+              String state = "imhelen";//为了让大家能够使用我搭建的外网的微信回调跳转服务器，这里填写你在ngrok的前置域名
+      
+              System.out.println("state = " + state);
+              // 采用redis等进行缓存state 使用sessionId为key 30分钟后过期，可配置
+              //键："wechar-open-state-" + httpServletRequest.getSession().getId()
+              //值：satte
+              //过期时间：30分钟
+      
+              //生成qrcodeUrl
+              String qrcodeUrl = String.format(
+                      baseUrl,
+                      ConstantPropertiesUtil.WX_OPEN_APP_ID,
+                      redirectUrl,
+                      state);
+      		return "redirect:" + qrcodeUrl;
+      	}
+      }
+      ```
+
+      授权url参数说明
+
+      |     参数      | 是否必须 |                             说明                             |
+      | :-----------: | :------: | :----------------------------------------------------------: |
+      |     appid     |    是    |                         应用唯一标识                         |
+      | redirect_uri  |    是    |                请使用urlEncode对链接进行处理                 |
+      | response_type |    是    |                            填code                            |
+      |     scope     |    是    | 应用授权作用域，拥有多个作用域用逗号（,）分隔，网页应用目前仅填写snsapi_login即 |
+      |     state     |    否    | 用于保持请求和回调的状态，授权请求后原样带回给第三方。该参数可用于防止csrf攻击（跨站请求伪造攻击），建议第三方带上该参数，可设置为简单的随机数加session进行校验 |
+
+   4. 测试
+
+      访问：http://localhost:8160/api/ucenter/wx/login
+      访问授权url后会得到一个微信登录二维码
+
+      <img src="README.assets/image-20220415125613718.png" alt="image-20220415125613718" style="zoom:67%;" /> 
+
+      扫码后授权后，会返回到配置文件配置的redirect_url路径
+
+      由于这里没有域名，访问http://localhost:8160/api/ucenter/wx/login后会报错：
+
+      ![image-20220415135643980](README.assets/image-20220415135643980.png) 
+
+      则需要先进行下面：
+
+      1. 全局配置的跳转路径
+
+         ```properties
+         # 微信开放平台 重定向url # 我这里是 http://localhost:8160/api/ucenter/wxcallback
+         wx.open.redirect_url=http://回调地址/api/ucenter/wx/callback#
+         ```
+
+      2. 修改当前项目启动端口号为8160
+
+      3. 用户点击“确认登录”后，微信服务器会向谷粒学院的业务服务器发起回调，因此接下来我们需要开发回调controller在WxApiController中添加方法
+
+         ```java
+         //测试回调是否可用
+         @GetMapping("callback")
+         public String callback(String code, String state, HttpSession session) {
+             //得到授权临时票据code
+             System.out.println("code = " + code);
+             System.out.println("state = " + state);
+             return "redirect:http://localhost:3000";
+         }	
+         ```
+
+### 7-4、callback回调
+
+<img src="README.assets/image-20220415141226943.png" alt="image-20220415141226943" style="zoom:50%;" />
+
+<img src="README.assets/image-20220415141333087.png" alt="image-20220415141333087" style="zoom:50%;" /> 
 
 
 
 
 
+1. 引入依赖
 
+   ```java
+   <dependency>
+       <groupId>org.apache.httpcomponents</groupId>
+       <artifactId>httpclient</artifactId>
+   </dependency>
+   <dependency>
+   	<groupId>commons-io</groupId>
+   	<artifactId>commons-io</artifactId>
+   </dependency>
+   <dependency>
+   	<groupId>com.google.code.gson</groupId>
+   	<artifactId>gson</artifactId>
+   </dependency>
+   ```
 
+2. 创建httpclient工具类
 
+   ```java
+   package com.geek.educenter.utils;
+   
+   /**
+    * 依赖的jar包有：commons-lang-2.6.jar、httpclient-4.3.2.jar、httpcore-4.3.1.jar、commons-io-2.4.jar
+    *
+    * @author zhaoyb
+    */
+   public class HttpClientUtils {
+   
+       public static final int connTimeout = 10000;
+       public static final int readTimeout = 10000;
+       public static final String charset = "UTF-8";
+       private static HttpClient client = null;
+   
+       static {
+           PoolingHttpClientConnectionManager cm = new PoolingHttpClientConnectionManager();
+           cm.setMaxTotal(128);
+           cm.setDefaultMaxPerRoute(128);
+           client = HttpClients.custom().setConnectionManager(cm).build();
+       }
+   
+       public static String postParameters(String url, String parameterStr) throws ConnectTimeoutException, SocketTimeoutException, Exception {
+           return post(url, parameterStr, "application/x-www-form-urlencoded", charset, connTimeout, readTimeout);
+       }
+   
+       public static String postParameters(String url, String parameterStr, String charset, Integer connTimeout, Integer readTimeout) throws ConnectTimeoutException, SocketTimeoutException, Exception {
+           return post(url, parameterStr, "application/x-www-form-urlencoded", charset, connTimeout, readTimeout);
+       }
+   
+       public static String postParameters(String url, Map<String, String> params) throws ConnectTimeoutException,
+               SocketTimeoutException, Exception {
+           return postForm(url, params, null, connTimeout, readTimeout);
+       }
+   
+       public static String postParameters(String url, Map<String, String> params, Integer connTimeout, Integer readTimeout) throws ConnectTimeoutException,
+               SocketTimeoutException, Exception {
+           return postForm(url, params, null, connTimeout, readTimeout);
+       }
+   
+       public static String get(String url) throws Exception {
+           return get(url, charset, null, null);
+       }
+   
+       public static String get(String url, String charset) throws Exception {
+           return get(url, charset, connTimeout, readTimeout);
+       }
+   
+       /**
+        * 发送一个 Post 请求, 使用指定的字符集编码.
+        *
+        * @param url
+        * @param body        RequestBody
+        * @param mimeType    例如 application/xml "application/x-www-form-urlencoded" a=1&b=2&c=3
+        * @param charset     编码
+        * @param connTimeout 建立链接超时时间,毫秒.
+        * @param readTimeout 响应超时时间,毫秒.
+        * @return ResponseBody, 使用指定的字符集编码.
+        * @throws ConnectTimeoutException 建立链接超时异常
+        * @throws SocketTimeoutException  响应超时
+        * @throws Exception
+        */
+       public static String post(String url, String body, String mimeType, String charset, Integer connTimeout, Integer readTimeout)
+               throws ConnectTimeoutException, SocketTimeoutException, Exception {
+           HttpClient client = null;
+           HttpPost post = new HttpPost(url);
+           String result = "";
+           try {
+               if (StringUtils.isNotBlank(body)) {
+                   HttpEntity entity = new StringEntity(body, ContentType.create(mimeType, charset));
+                   post.setEntity(entity);
+               }
+               // 设置参数
+               Builder customReqConf = RequestConfig.custom();
+               if (connTimeout != null) {
+                   customReqConf.setConnectTimeout(connTimeout);
+               }
+               if (readTimeout != null) {
+                   customReqConf.setSocketTimeout(readTimeout);
+               }
+               post.setConfig(customReqConf.build());
+   
+               HttpResponse res;
+               if (url.startsWith("https")) {
+                   // 执行 Https 请求.
+                   client = createSSLInsecureClient();
+                   res = client.execute(post);
+               } else {
+                   // 执行 Http 请求.
+                   client = HttpClientUtils.client;
+                   res = client.execute(post);
+               }
+               result = IOUtils.toString(res.getEntity().getContent(), charset);
+           } finally {
+               post.releaseConnection();
+               if (url.startsWith("https") && client != null && client instanceof CloseableHttpClient) {
+                   ((CloseableHttpClient) client).close();
+               }
+           }
+           return result;
+       }
+   
+   
+       /**
+        * 提交form表单
+        *
+        * @param url
+        * @param params
+        * @param connTimeout
+        * @param readTimeout
+        * @return
+        * @throws ConnectTimeoutException
+        * @throws SocketTimeoutException
+        * @throws Exception
+        */
+       public static String postForm(String url, Map<String, String> params, Map<String, String> headers, Integer connTimeout, Integer readTimeout) throws ConnectTimeoutException,
+               SocketTimeoutException, Exception {
+   
+           HttpClient client = null;
+           HttpPost post = new HttpPost(url);
+           try {
+               if (params != null && !params.isEmpty()) {
+                   List<NameValuePair> formParams = new ArrayList<NameValuePair>();
+                   Set<Entry<String, String>> entrySet = params.entrySet();
+                   for (Entry<String, String> entry : entrySet) {
+                       formParams.add(new BasicNameValuePair(entry.getKey(), entry.getValue()));
+                   }
+                   UrlEncodedFormEntity entity = new UrlEncodedFormEntity(formParams, Consts.UTF_8);
+                   post.setEntity(entity);
+               }
+   
+               if (headers != null && !headers.isEmpty()) {
+                   for (Entry<String, String> entry : headers.entrySet()) {
+                       post.addHeader(entry.getKey(), entry.getValue());
+                   }
+               }
+               // 设置参数
+               Builder customReqConf = RequestConfig.custom();
+               if (connTimeout != null) {
+                   customReqConf.setConnectTimeout(connTimeout);
+               }
+               if (readTimeout != null) {
+                   customReqConf.setSocketTimeout(readTimeout);
+               }
+               post.setConfig(customReqConf.build());
+               HttpResponse res = null;
+               if (url.startsWith("https")) {
+                   // 执行 Https 请求.
+                   client = createSSLInsecureClient();
+                   res = client.execute(post);
+               } else {
+                   // 执行 Http 请求.
+                   client = HttpClientUtils.client;
+                   res = client.execute(post);
+               }
+               return IOUtils.toString(res.getEntity().getContent(), "UTF-8");
+           } finally {
+               post.releaseConnection();
+               if (url.startsWith("https") && client != null
+                       && client instanceof CloseableHttpClient) {
+                   ((CloseableHttpClient) client).close();
+               }
+           }
+       }
+   
+   
+       /**
+        * 发送一个 GET 请求
+        *
+        * @param url
+        * @param charset
+        * @param connTimeout 建立链接超时时间,毫秒.
+        * @param readTimeout 响应超时时间,毫秒.
+        * @return
+        * @throws ConnectTimeoutException 建立链接超时
+        * @throws SocketTimeoutException  响应超时
+        * @throws Exception
+        */
+       public static String get(String url, String charset, Integer connTimeout, Integer readTimeout)
+               throws ConnectTimeoutException, SocketTimeoutException, Exception {
+   
+           HttpClient client = null;
+           HttpGet get = new HttpGet(url);
+           String result = "";
+           try {
+               // 设置参数
+               Builder customReqConf = RequestConfig.custom();
+               if (connTimeout != null) {
+                   customReqConf.setConnectTimeout(connTimeout);
+               }
+               if (readTimeout != null) {
+                   customReqConf.setSocketTimeout(readTimeout);
+               }
+               get.setConfig(customReqConf.build());
+   
+               HttpResponse res = null;
+   
+               if (url.startsWith("https")) {
+                   // 执行 Https 请求.
+                   client = createSSLInsecureClient();
+                   res = client.execute(get);
+               } else {
+                   // 执行 Http 请求.
+                   client = HttpClientUtils.client;
+                   res = client.execute(get);
+               }
+   
+               result = IOUtils.toString(res.getEntity().getContent(), charset);
+           } finally {
+               get.releaseConnection();
+               if (url.startsWith("https") && client != null && client instanceof CloseableHttpClient) {
+                   ((CloseableHttpClient) client).close();
+               }
+           }
+           return result;
+       }
+   
+   
+       /**
+        * 从 response 里获取 charset
+        *
+        * @param ressponse
+        * @return
+        */
+       @SuppressWarnings("unused")
+       private static String getCharsetFromResponse(HttpResponse ressponse) {
+           // Content-Type:text/html; charset=GBK
+           if (ressponse.getEntity() != null && ressponse.getEntity().getContentType() != null && ressponse.getEntity().getContentType().getValue() != null) {
+               String contentType = ressponse.getEntity().getContentType().getValue();
+               if (contentType.contains("charset=")) {
+                   return contentType.substring(contentType.indexOf("charset=") + 8);
+               }
+           }
+           return null;
+       }
+   
+   
+       /**
+        * 创建 SSL连接
+        *
+        * @return
+        * @throws GeneralSecurityException
+        */
+       private static CloseableHttpClient createSSLInsecureClient() throws GeneralSecurityException {
+           try {
+               SSLContext sslContext = new SSLContextBuilder().loadTrustMaterial(null, new TrustStrategy() {
+                   public boolean isTrusted(X509Certificate[] chain, String authType) throws CertificateException {
+                       return true;
+                   }
+               }).build();
+   
+               SSLConnectionSocketFactory sslsf = new SSLConnectionSocketFactory(sslContext, new X509HostnameVerifier() {
+   
+                   @Override
+                   public boolean verify(String arg0, SSLSession arg1) {
+                       return true;
+                   }
+   
+                   @Override
+                   public void verify(String host, SSLSocket ssl)
+                           throws IOException {
+                   }
+   
+                   @Override
+                   public void verify(String host, X509Certificate cert)
+                           throws SSLException {
+                   }
+   
+                   @Override
+                   public void verify(String host, String[] cns,
+                                      String[] subjectAlts) throws SSLException {
+                   }
+   
+               });
+   
+               return HttpClients.custom().setSSLSocketFactory(sslsf).build();
+   
+           } catch (GeneralSecurityException e) {
+               throw e;
+           }
+       }
+   }
+   ```
 
+3. controller中的callback接口
+
+   ```java
+       /**
+        * 授权登录后的回调，获取扫码人信息
+        *
+        * @param code
+        * @param state
+        * @return
+        */
+       @GetMapping("callback")
+       public String callback(String code, String state) {
+           //得到授权临时票据code
+   
+           //2.利用code请求微信固定的地址,得到两个值 access_token和openid
+           String baseAccessTokenUrl = "https://api.weixin.qq.com/sns/oauth2/access_token" +
+                   "?appid=%s" +
+                   "&secret=%s" +
+                   "&code=%s" +
+                   "&grant_type=authorization_code";
+           //拼接三个参数
+           String AccessTokenUrl = String.format(
+                   baseAccessTokenUrl,
+                   ConstantWxUtils.WX_OPEN_APP_ID,
+                   ConstantWxUtils.WX_OPEN_APP_SECRET,
+                   code
+           );
+           //使用httpClient发送请求,得到返回结果
+           String result = null;
+           try {
+               result = HttpClientUtils.get(AccessTokenUrl);
+           } catch (Exception e) {
+               throw new GuliException(20001, "获取token出错");
+           }
+           log.info("result:" + result);
+           //解析json字符串 取出accesstoken和openid
+           Gson gson = new Gson();
+           HashMap map = gson.fromJson(result, HashMap.class);
+           String accessToken = (String) map.get("access_token");
+           log.info("accessToken:" + accessToken);
+           String openid = (String) map.get("openid");
+           log.info("openid:" + openid);
+   
+           //查询数据库当前用用户是否曾经使用过微信登录
+           UcenterMember member = memberService.getByOpenId(openid);
+           if (member == null) {
+               log.info("新用户注册");
+               //通过accessToken和openid 请求路径获取个人信息
+               String baseUserInfoUrl = "https://api.weixin.qq.com/sns/userinfo" +
+                       "?access_token=%s" +
+                       "&openid=%s";
+               String userInfoUrl = String.format(
+                       baseUserInfoUrl,
+                       accessToken,
+                       openid
+               );
+               String resultUserInfo = null;
+               try {
+                   resultUserInfo = HttpClientUtils.get(userInfoUrl);
+                   log.info("userInfo:" + resultUserInfo);
+               } catch (Exception e) {
+                   throw new GuliException(20001, "请求用户个人信息出错");
+               }
+               //对个人信息进行json转换取出
+               HashMap userInfoMap = gson.fromJson(resultUserInfo, HashMap.class);
+               String nickname = (String) userInfoMap.get("nickname");
+               log.info("nickname:" + nickname);
+               String headimgurl = (String) userInfoMap.get("headimgurl");
+               log.info("headimgurl:" + headimgurl);
+   
+               //将用户存入数据库
+               member = new UcenterMember();
+               member.setNickname(nickname);
+               member.setAvatar(headimgurl);
+               member.setOpenid(openid);
+               memberService.save(member);
+           }
+           
+           return "redirect:http://localhost:3000";
+       }
+   ```
+
+4. 业务层
+
+   业务接口：UcenterMemberService.java
+
+   ```java
+       /**
+        * 根据openid查询用户
+        * @param openid
+        * @return
+        */
+       UcenterMember getByOpenId(String openid);
+   ```
+
+   业务实现：UcenterMemberServiceImpl.java
+
+   ```java
+   @Override
+   public UcenterMember getByOpenId(String openid) {
+       QueryWrapper<UcenterMember> queryWrapper = new QueryWrapper<>();
+       queryWrapper.eq("openid", openid);
+       UcenterMember member = baseMapper.selectOne(queryWrapper);
+       return member;
+   }
+   ```
+
+5. 整合JWT令牌
+
+   根据微信信息使用jwt,生成token字符串，把token字符串通过路径传递到首页面
+
+   ```java
+   //使用jwt根据member对象生成token字符串
+   String jwtToken = JwtUtils.getJwtToken(member.getId(), member.getNickname());
+   //存入cookie
+   //CookieUtils.setCookie(request, response, "guli_jwt_token", token);
+   //因为端口号不同存在蛞蝓问题，cookie不能跨域，所以这里使用url重写
+   return "redirect:http://localhost:3000?token=" + jwtToken;
+   ```
+
+   接下来前端获取到token，将token放到cookie中，调用根据token获取用户信息的接口，返回用户信息存到cookie的用户信息字段进行显示
 
 
 
