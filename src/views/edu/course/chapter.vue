@@ -14,7 +14,8 @@
     <el-button
       type="text"
       @click="openChapterDialog()"
-    >添加章节</el-button>
+    >添加章节
+    </el-button>
     <!-- 章节 -->
     <ul class="chanpterList">
       <li
@@ -186,6 +187,7 @@ export default {
       chapterVideoList: [],
       dialogChapterFormVisible: false,//添加章节的弹框是否启用
       chapter: {//封装章节的数据
+        id:"",
         title: "",
         sort: 0
       },
