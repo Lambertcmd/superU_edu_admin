@@ -3805,21 +3805,479 @@ OAuth2主要可以解决两个问题
 
 
 
+# 十一、阿里云视频点播服务
+
+
+
+## 1、开通阿里云视频点播服务
+
+开通路径：https://www.aliyun.com/product/vod?spm=5176.19720258.J_3207526240.31.2a472c4a9tk2Xs
+
+**开通时选择按流量计费**
+
+<img src="README.assets/image-20220419212224757.png" alt="image-20220419212224757" style="zoom: 80%;" /> 
+
+## 2、视频点播服务的基本使用
+
+官方文档：https://help.aliyun.com/document_detail/94311.html
+
+### 2-1、设置转码格式
+
+流程：配置管理-媒体处理配置-转码模板组
+
+在视频转码模板组页面，根据业务需求选择封装格式和清晰度。或直接将已有的模板设置为默认即可
+
+<img src="README.assets/image-20220419212516782.png" alt="image-20220419212516782" style="zoom:67%;" /> 
+
+### 2-2、分类管理
+
+流程：配置管理-媒资管理配置-分类管理
+
+添加一个新的分类：
+
+<img src="README.assets/image-20220419212702471.png" alt="image-20220419212702471" style="zoom:67%;" /> 
+
+
+
+## 3、Springboot整合阿里云视频点播服务端SDK
+
+### 3-1、简介
+
+sdk的方式将api进行了进一步的封装，不用自己创建工具类。
+我们可以基于服务端SDK编写代码来调用点播API，实现对点播产品和服务的快速操作。
+
+### 3-2、环境配置
+
+1. 引入pom依赖
+
+   ```xml
+   <dependency>
+       <groupId>com.aliyun</groupId>
+       <artifactId>aliyun-java-sdk-core</artifactId>
+   </dependency>
+   <dependency>
+       <groupId>com.aliyun.oss</groupId>
+       <artifactId>aliyun-sdk-oss</artifactId>
+   </dependency>
+   <dependency>
+       <groupId>com.aliyun</groupId>
+       <artifactId>aliyun-java-sdk-vod</artifactId>
+   </dependency>
+   <dependency>
+       <groupId>com.aliyun</groupId>
+       <artifactId>aliyun-sdk-vod-upload</artifactId>
+   </dependency>
+   <dependency>
+       <groupId>com.alibaba</groupId>
+       <artifactId>fastjson</artifactId>
+   </dependency>
+   <dependency>
+       <groupId>org.json</groupId>
+       <artifactId>json</artifactId>
+   </dependency>
+   <dependency>
+       <groupId>com.google.code.gson</groupId>
+       <artifactId>gson</artifactId>
+   </dependency>
+   <dependency>
+       <groupId>joda-time</groupId>
+       <artifactId>joda-time</artifactId>
+   </dependency>
+   ```
+
+2. 配置文件
+
+   ```yaml
+   # 服务端口
+   server:
+     port: 8003
+   # 服务名
+   spring:
+     application:
+       name: service-vod
+   #环境设置：dev、test、prod
+     profiles:
+       active: dev
+     servlet:
+       multipart:
+         max-file-size: 1024MB #最大上传单个文件大小 默认1M
+         max-request-size: 1024MB  #最大置总上传的数据大小 默认10M
+     cloud:
+       nacos:
+         discovery:
+           server-addr: localhost:8848 #配置nacos服务地址
+   
+   #阿里云
+   aliyun:
+     vod:
+       file:
+         keyid: LTAI5tPvpheNZzHZqu2Htgko
+         keysecret: T18RmuOTonkTn7oyzGoUCrgIqWx28v
+   
+   logging:
+     level:
+       com.alibaba.nacos.client.naming: WARN
+       com.alibaba.nacos.client.config.impl: WARN
+   ```
+
+3. 初始化
+
+   参考文档：https://help.aliyun.com/document_detail/61062.html
+
+   ```java
+   package com.geek.vod.utils;
+   
+   public class InitVodClient {
+       public static DefaultAcsClient initVodClient(String accessKeyId, String accessKeySecret) throws ClientException {
+           String regionId = "cn-shanghai";  // 点播服务接入地域
+           DefaultProfile profile = DefaultProfile.getProfile(regionId, accessKeyId, accessKeySecret);
+           DefaultAcsClient client = new DefaultAcsClient(profile);
+           return client;
+       }
+   }
+   ```
+
+4. 读取配置文件的常量类
+
+   ```java
+   package com.geek.vod.utils;
+   
+   /**
+    * @ClassName ConstantVodPropertiesUtils
+    * @Description 读取yml配置的内容
+    * @Author Lambert
+    * @Date 2022/3/19 1:14
+    * @Version 1.0
+    **/
+   @Component
+   public class ConstantVodPropertiesUtil implements InitializingBean {
+   
+       @Value("${aliyun.vod.file.keyid}")
+       private String keyId;
+   
+       @Value("${aliyun.vod.file.keysecret}")
+       private String keySecret;
+   
+       public static String ACCESS_KEY_ID;
+   
+       public static String ACCESS_KEY_SECRET;
+   
+   
+       /**
+        * 项目启动时执行该方法
+        * @throws Exception
+        */
+       public void afterPropertiesSet() throws Exception {
+           ACCESS_KEY_ID = keyId;
+           ACCESS_KEY_SECRET = keySecret;
+       }
+   }
+   ```
+
+### 3-3、上传视频到阿里云视频点播
+
+1. controller
+
+   ```java
+   @ApiOperation("上传视频到阿里云")
+   @PostMapping("/uploadVideo")
+   public R uploadVideo(@RequestPart("file") MultipartFile file){
+       String videoSourceId = vodService.uploadVideo(file);
+       return R.ok().data("videoSourceId",videoSourceId);
+   }
+   ```
+
+2. service及实现类
+
+   ```java
+       /**
+        * 上传视频到阿里云
+        * @param file
+        * @return
+        */
+       String uploadVideo(MultipartFile file);
+   ```
+
+   ```java
+       @Override
+       public String uploadVideo(MultipartFile file) {
+           //accessKeyId, accessKeySecret
+           String accessKeyId = ConstantVodPropertiesUtil.ACCESS_KEY_ID;
+           String accessKeySecret = ConstantVodPropertiesUtil.ACCESS_KEY_SECRET;
+           //fileName:上传文件原始名称
+           String fileName = file.getOriginalFilename();
+           //title:上传到阿里云后的视频名称
+           //从最后一个.开始往前面截取内容 (01.mp4只截取01)
+           String title = fileName.substring(0, fileName.lastIndexOf("."));
+           //inputStream 上传文件输入流
+           InputStream inputStream = null;
+           //最终上传的视频id
+           String videoId = null;
+           try {
+               inputStream = file.getInputStream();
+               UploadStreamRequest request = new UploadStreamRequest(accessKeyId, accessKeySecret, title, fileName, inputStream);
+   
+               UploadVideoImpl uploader = new UploadVideoImpl();
+               UploadStreamResponse response = uploader.uploadStream(request);
+               System.out.print("RequestId=" + response.getRequestId() + "\n");  //请求视频点播服务的请求ID
+   
+               if (response.isSuccess()) {
+                   videoId = response.getVideoId();
+                   System.out.print("VideoId=" + response.getVideoId() + "\n");
+               } else { //如果设置回调URL无效，不影响视频上传，可以返回VideoId同时会返回错误码。其他情况上传失败时，VideoId为空，此时需要根据返回错误码分析具体错误原因
+                   videoId = response.getVideoId();
+                   System.out.print("ErrorCode=" + response.getCode() + "\n");
+                   System.out.print("ErrorMessage=" + response.getMessage() + "\n");
+               }
+   
+           } catch (IOException e) {
+               e.printStackTrace();
+           }
+           return videoId;
+       }
+   ```
+
+### 3-4、根据云端视频id删除云端视频
+
+1. controller
+
+   ```java
+   @ApiOperation("根据云端视频id删除云端视频")
+   @ApiImplicitParam(name = "id",value = "云端视频id")
+   @DeleteMapping("removeVideoSourceById/{id}")
+   public R removeVideoSourceById(@PathVariable("id") String id){
+       return vodService.removeVideoById(id);
+   }
+   ```
+
+2. service
+
+   ```java
+       /**
+        * 根据云端视频id删除云端视频
+        * @param id
+        * @return
+        */
+       R removeVideoById(String id);
+   ```
+
+   ```java
+   @Override
+   public R removeVideoById(String id) {
+       String accessKeyId = ConstantVodPropertiesUtil.ACCESS_KEY_ID;
+       String accessKeySecret = ConstantVodPropertiesUtil.ACCESS_KEY_SECRET;
+       try {
+           DefaultAcsClient client = InitVodClient.initVodClient(accessKeyId, accessKeySecret);
+   
+           DeleteVideoRequest request = new DeleteVideoRequest();
+           DeleteVideoResponse response = new DeleteVideoResponse();
+           //设置需要删除的视频id
+           request.setVideoIds(id);
+           response = client.getAcsResponse(request);
+           return R.ok();
+       } catch (ClientException e) {
+           e.printStackTrace();
+           throw new GuliException(20001, "删除视频失败");
+       }
+   
+   }
+   ```
+
+### 3-5、批量删除云端视频
+
+1. controller
+
+   ```java
+   @ApiOperation("批量删除云端视频")
+   @ApiImplicitParam(name = "videoSourceIdList",value = "云端视频id集合")
+   @DeleteMapping("/deleteBatchVideo")
+   public R deleteBatchVideo(@RequestParam("videoSourceIdList") List<String> videoSourceIdList){
+       return vodService.deleteBatchVideo(videoSourceIdList);
+   }
+   ```
+
+2. service
+
+   ```java
+       /**
+        * 根据云端视频id集合批量删除云端视频
+        * @param videoIdList
+        * @return
+        */
+       R deleteBatchVideo(List<String> videoIdList);
+   ```
+
+   ```java
+   @Override
+   public R deleteBatchVideo(List<String> videoSourceIdList) {
+       String accessKeyId = ConstantVodPropertiesUtil.ACCESS_KEY_ID;
+       String accessKeySecret = ConstantVodPropertiesUtil.ACCESS_KEY_SECRET;
+       try {
+           DefaultAcsClient client = InitVodClient.initVodClient(accessKeyId, accessKeySecret);
+   
+           DeleteVideoRequest request = new DeleteVideoRequest();
+           DeleteVideoResponse response = new DeleteVideoResponse();
+   
+           //将videoIdList转换成1，2，3 (遍历集合内的方法，每个元素用,隔开)
+           String videoIds = StringUtils.join(videoSourceIdList, ",");
+           log.info("videoIds"+videoIds);
+           //设置需要删除的视频id
+           request.setVideoIds(videoIds);
+           response = client.getAcsResponse(request);
+           return R.ok();
+       } catch (ClientException e) {
+           e.printStackTrace();
+           throw new GuliException(20001, "批量删除视频失败");
+       }
+   }
+   ```
+
+### 3-6、阿里云视频播放
+
+1. 集成视频播放器
+
+   引入脚本文件和css文件
+
+   ```html
+   <link rel="stylesheet" href="https://g.alicdn.com/de/prismplayer/2.8.1/skins/default/aliplayer-min.css" />
+   <script charset="utf-8" type="text/javascript"src="https://g.alicdn.com/de/prismplayer/2.8.1/aliplayer-min.js"></script>
+   ```
+
+   初始化视频播放器
+
+   ```html
+   <body>
+   	<div class="prism-player" id="J_prismPlayer"></div>
+   	<script>
+           var player = new Aliplayer({
+               id: 'J_prismPlayer',
+               width: '100%',
+               autoplay: false,
+               cover: 'http://liveroom-img.oss-cn-qingdao.aliyuncs.com/logo.png',
+               //播放配置(根据播放地址播放 / 根据播放凭证播放)
+               //播放方式一：支持播放地址播放,此播放优先级最高，此种方式不能播放加密视频 
+   			source: 'https://outin-9ef51d93a5f411ec84d700163e1c9256.oss-cn-shanghai.aliyuncs.com/sv/5bd95fc9-17fbabae057/5bd95fc9-17fbabae057.mp4?Expires=1650381468&OSSAccessKeyId=LTAI8bKSZ6dKjf44&Signature=%2F13WQMhIV4mv31KJgo2%2BkD%2F2edc%3D'//播放地址
+               //播放方式二：播放凭证播放（推荐）
+           },function(player){
+               console.log('播放器创建好了。')
+           });
+   	</script>
+   </body>
+   ```
+
+2. 根据播放地址播放
+
+   ```javascript
+   //播放方式一：支持播放地址播放,此播放优先级最高，此种方式不能播放加密视频 
+   source: 'https://outin-9ef51d93a5f411ec84d700163e1c9256.oss-cn-shanghai.aliyuncs.com/sv/5bd95fc9-17fbabae057/5bd95fc9-17fbabae057.mp4?Expires=1650381468&OSSAccessKeyId=LTAI8bKSZ6dKjf44&Signature=%2F13WQMhIV4mv31KJgo2%2BkD%2F2edc%3D'//播放地址
+   ```
+
+3. 根据播放凭证播放（推荐）
+
+   ```javascript
+   //播放方式二：播放凭证播放（推荐）
+   encryptType:'1',//如果播放加密视频，则需设置encryptType=1，非加密视频无需设置此项
+   vid : 'aac115585913445a880164ee1508c879',//视频id
+   playauth : '视频授权码',//视频播放凭证 后端获取
+   // 以下可选设置
+   cover: 'http://guli.shop/photo/banner/1525939573202.jpg', // 封面
+   qualitySort: 'asc', // 清晰度排序
+   mediaType: 'video', // 返回音频还是视频
+   autoplay: false, // 自动播放
+   isLive: false, // 直播
+   rePlay: false, // 循环播放
+   preload: true,
+   controlBarVisibility: 'hover', // 控制条的显示方式：鼠标悬停
+   ```
+
+   视频id获取方式：
+
+   <img src="README.assets/image-20220419223117614.png" alt="image-20220419223117614" style="zoom: 33%;" />  	
+
+   各种阿里云播放组件（广告等）：https://player.alicdn.com/aliplayer/presentation/index.html
+
+4. 后端获取播放凭证
+
+   ```java
+   //根据视频id获取视频播放凭证
+   public static void getPlayAuth(){
+   
+       DefaultAcsClient client = InitVodClient.initVodClient("LTAI5tPvpheNZzHZqu2Htgko", "T18RmuOTonkTn7oyzGoUCrgIqWx28v");
+       GetVideoPlayAuthResponse response = new GetVideoPlayAuthResponse();
+       try {
+           response = getVideoPlayAuth(client);
+           //播放凭证
+           System.out.print("PlayAuth = " + response.getPlayAuth() + "\n");
+           //VideoMeta信息
+           System.out.print("VideoMeta.Title = " + response.getVideoMeta().getTitle() + "\n");
+       }catch (ClientException e){
+           System.out.print("ErrorMessage = " + e.getLocalizedMessage());
+       }
+       System.out.print("RequestId = " + response.getRequestId() + "\n");
+   }
+   
+   public static GetVideoPlayAuthResponse getVideoPlayAuth(DefaultAcsClient client) throws ClientException {
+       GetVideoPlayAuthRequest request = new GetVideoPlayAuthRequest();
+       request.setVideoId("aac115585913445a880164ee1508c879");
+       //request.setAuthInfoTimeout(200L);//设置播放凭证的有效期 默认100s
+       return client.getAcsResponse(request);
+   }
+   ```
+
+### 3-7、Springboot整合阿里云视频播放
+
+1. controller
+
+   ```java
+   @ApiOperation("根据云端视频id获取视频播放凭证")
+   @GetMapping("getPlayAuth/{videoId}")
+   public R getPlayAuth(@PathVariable("videoId") String videoId) throws ClientException {
+       if (StringUtils.isBlank(videoId)) {
+           throw new GuliException(20001, "视频id为空");
+       }
+       String playAuth = vodService.getPlayAuth(videoId);
+       return R.ok().data("playAuth", playAuth);
+   }
+   ```
+
+2. service
+
+   ```java
+       /**
+        * 根据云端视频id获得播放凭证
+        * @param videoId
+        * @return
+        */
+       String getPlayAuth(String videoId) throws ClientException;
+   ```
+
+   ```java
+       @Override
+       public String getPlayAuth(String videoId) throws ClientException {
+           //获取阿里云存储相关常量
+           String accessKeyId = ConstantVodPropertiesUtil.ACCESS_KEY_ID;
+           String accessKeySecret = ConstantVodPropertiesUtil.ACCESS_KEY_SECRET;
+           //初始化
+           DefaultAcsClient client = InitVodClient.initVodClient(accessKeyId, accessKeySecret);
+           //请求
+           GetVideoPlayAuthRequest request = new GetVideoPlayAuthRequest();
+           request.setVideoId(videoId);
+           //响应
+           GetVideoPlayAuthResponse response = client.getAcsResponse(request);
+           //获得播放凭证
+           String playAuth = response.getPlayAuth();
+   
+           //返回结果
+           return playAuth;
+       }
+   ```
 
 
 
 
 
 
-
-
-
-
-
-
-
-
-
+  
 
 
 
