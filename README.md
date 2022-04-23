@@ -4272,16 +4272,782 @@ sdk的方式将api进行了进一步的封装，不用自己创建工具类。
        }
    ```
 
+# 十二、统计模块图表展示前端
+
+## 一、ECharts
+
+### 1、简介
+
+ECharts是百度的一个项目，后来百度把Echart捐给apache，用于图表展示，提供了常规的折线图、柱状
+图、散点图、饼图、K线图，用于统计的盒形图，用于地理数据可视化的地图、热力图、线图，用于关系
+数据可视化的关系图、treemap、旭日图，多维数据可视化的平行坐标，还有用于 BI 的漏斗图，仪表
+盘，并且支持图与图之间的混搭。
+官方网站：https://echarts.apache.org/zh/index.html
+
+### 2、安装
+
+#### 从 npm 获取
+
+```text
+npm install echarts --save
+```
+
+详见[在项目中引入 Apache ECharts](https://echarts.apache.org/handbook/zh/basics/import)。
+
+#### 从 CDN 获取
+
+推荐从 jsDelivr 引用 [echarts](https://www.jsdelivr.com/package/npm/echarts)。
+
+#### 从 GitHub 获取
+
+[apache/echarts](https://github.com/apache/echarts) 项目的 [release](https://github.com/apache/echarts/releases) 页面可以找到各个版本的链接。点击下载页面下方 Assets 中的 Source code，解压后 `dist` 目录下的 `echarts.js` 即为包含完整 ECharts 功能的文件。
+
+### 3、基本使用
+
+1. 创建html页面
+
+2. 引入ECharts
+
+   ```javascript
+   <!-- 引入 ECharts 文件 -->
+   <script src="echarts.min.js"></script>
+   ```
+
+3. 定义图表区域
+
+   ```html
+   <!-- 为ECharts准备一个具备大小（宽高）的Dom -->
+   <div id="main" style="width: 600px;height:400px;"></div>
+   ```
+
+4. 渲染图表
+
+   ```javascript
+   <script type="text/javascript">
+       // 基于准备好的dom，初始化echarts实例
+       var myChart = echarts.init(document.getElementById('main'));
+       // 指定图表的配置项和数据
+       var option = {
+           title: {
+               text: 'ECharts 入门示例'
+           },
+           tooltip: {},
+           legend: {
+               data: ['销量']
+           },
+           xAxis: {
+               data: ["衬衫", "羊毛衫", "雪纺衫", "裤子", "高跟鞋", "袜子"]
+           },
+           yAxis: {},
+           series: [{
+               name: '销量',
+               type: 'bar',
+               data: [5, 20, 36, 10, 10, 20]
+           }]
+       };
+       // 使用刚指定的配置项和数据显示图表。
+       myChart.setOption(option);
+   </script>
+   ```
+
+5. 效果
+
+   <img src="README.assets/image-20220423154011260.png" alt="image-20220423154011260" style="zoom:50%;" /> 
+
+   
+
+## 二、项目中集成ECharts
+
+### 1、安装ECharts
+
+```shell
+cnpm install --save echarts@4.1.0
+```
 
 
 
+### 2、前端代码
+
+```vue
+<template>
+  <div class="app-container">
+    <!--表单-->
+    <el-form
+      :inline="true"
+      class="demo-form-inline"
+    >
+      <el-form-item>
+        <el-select
+          v-model="searchObj.type"
+          clearable
+          placeholder="请选择"
+        >
+          <el-option
+            label="学员登录数统计"
+            value="login_num"
+          />
+          <el-option
+            label="学员注册数统计"
+            value="register_num"
+          />
+          <el-option
+            label="课程播放数统计"
+            value="video_view_num"
+          />
+          <el-option
+            label="每日课程数统计"
+            value="course_num"
+          />
+        </el-select>
+      </el-form-item>
+      <el-form-item>
+        <el-date-picker
+          v-model="searchObj.begin"
+          type="date"
+          placeholder="选择开始日期"
+          value-format="yyyy-MM-dd"
+        />
+      </el-form-item>
+      <el-form-item>
+        <el-date-picker
+          v-model="searchObj.end"
+          type="date"
+          placeholder="选择截止日期"
+          value-format="yyyy-MM-dd"
+        />
+      </el-form-item>
+      <el-button
+        :disabled="btnDisabled"
+        type="primary"
+        icon="el-icon-search"
+        @click="showChart()"
+      >查询</el-button>
+    </el-form>
+    <div class="chart-container">
+      <div
+        id="chart"
+        class="chart"
+        style="height:500px;width:100%"
+      />
+    </div>
+  </div>
+</template>
+<script>
+import echarts from 'echarts'
+import dailyStatistics from '@/api/statistics/daily';
+export default {
+  data() {
+    return {
+      searchObj: {
+        begin: "",
+        end: "",
+        type: ""
+      },
+      btnDisabled: false, //按钮禁用
+      chart: null,
+      title: '',
+      xData: [],
+      yData: []
+    }
+  },
+  created() {
+
+  },
+  methods: {
+    showChart() {
+      this.initChartData()
+      //   this.setChart()
+    },
+    // 准备图表数据
+    initChartData() {
+      dailyStatistics.showChart(this.searchObj)
+        .then((result) => {
+          //y轴数据
+          this.yData = result.data.dataList
+          //x轴时间
+          this.xData = result.data.dateCalculatedList
+          // 当前统计类别
+          switch (this.searchObj.type) {
+            case 'register_num':
+              this.title = '学员注册数统计'
+              break
+            case 'login_num':
+              this.title = '学员登录数统计'
+              break
+            case 'video_view_num':
+              this.title = '课程播放数统计'
+              break
+            case 'course_num':
+              this.title = '每日课程数统计'
+              break
+          }
+          this.setChart()
+        })
+    },
+    // 设置图标参数
+    setChart() {
+      // 基于准备好的dom，初始化echarts实例
+      this.chart = echarts.init(document.getElementById('chart'))
+      // console.log(this.chart)
+      // 指定图表的配置项和数据
+      var option = {
+        // x轴是类目轴（离散数据）,必须通过data设置类目数据
+        xAxis: {
+          type: 'category',
+          data: this.xData
+        },
+        // y轴是数据轴（连续数据）
+        yAxis: {
+          type: 'value'
+        },
+        // 系列列表。每个系列通过 type 决定自己的图表类型
+        series: [{
+          // 系列中的数据内容数组
+          data: this.yData,
+          // 折线图
+          type: 'line'
+        }],
+        //显示标题
+        title: {
+          text: this.title
+        },
+        //x坐标轴触发提示
+        tooltip: {
+          trigger: 'axis'
+        },
+        //区域缩放
+        dataZoom: [{
+          show: true,
+          height: 30,
+          xAxisIndex: [
+            0
+          ],
+          bottom: 30,
+          start: 10,
+          end: 80,
+          handleIcon: 'path://M306.1,413c0,2.2-1.8,4-4,4h-59.8c-2.2,0-4-1.8-4-4V200.8c0-2.2,1.8-4,4-4h59.8c2.2,0,4,1.8,4,4V413z',
+          handleSize: '110%',
+          handleStyle: {
+            color: '#d3dee5'
+          },
+          textStyle: {
+            color: '#fff'
+          },
+          borderColor: '#90979c'
+        },
+        {
+          type: 'inside',
+          show: true,
+          height: 15,
+          start: 1,
+          end: 35
+        }]
+      }
+      this.chart.setOption(option)
+    }
+  }
+}
+</script>
+```
+
+### 3、后端接口代码
+
+1. controller
+
+   ```java
+   @ApiOperation("根据条件展示统计数据")
+   @ApiImplicitParams({
+       @ApiImplicitParam(name = "begin",value = "开始日期"),
+       @ApiImplicitParam(name = "end",value = "结束日期"),
+       @ApiImplicitParam(name = "statisticsType",value = "统计数据类型")
+   })
+   @GetMapping("showChart/{begin}/{end}/{statisticsType}")
+   public R showChart(@PathVariable("begin") String begin,
+                      @PathVariable("end") String end,
+                      @PathVariable("statisticsType") String statisticsType){
+       if (StringUtils.isAnyBlank(begin,end,statisticsType)) {
+           log.info("部分参数为空,{},{},{}",begin,end,statisticsType);
+           return R.error().message("部分参数为空");
+       }
+       log.info("begin:{},end:{},type:{}",begin,end,statisticsType);
+       Map<String,Object> map = dailyService.getChartStatistics(begin,end,statisticsType);
+       return R.ok().data(map);
+   }
+   ```
+
+2. service
+
+   ```java
+   @Override
+   public Map<String, Object> getChartStatistics(String begin, String end, String statisticsType) {
+       //根据条件查询对象数据
+       QueryWrapper<StatisticsDaily> queryWrapper = new QueryWrapper<>();
+       queryWrapper.select(statisticsType,"date_calculated");//设置查询的字段
+       queryWrapper.between("date_calculated", begin, end);
+       List<StatisticsDaily> StatisticsList = baseMapper.selectList(queryWrapper);
+       //封装数据 由于返回有两个json数组(list)：日期装一个数组 数据装一个数组
+       Map<String, Object> map = new HashMap<>();
+       List<String> dateCalculatedList = new ArrayList<>();//日期集合
+       List<Integer> dataList = new ArrayList<>();//数据集合
+       //给集合封装数据
+       StatisticsList.forEach(dailyStatistics -> {
+           dateCalculatedList.add(dailyStatistics.getDateCalculated());
+           switch (statisticsType) {
+               case "register_num":
+                   dataList.add(dailyStatistics.getRegisterNum());
+                   break;
+               case "login_num":
+                   dataList.add(dailyStatistics.getLoginNum());
+                   break;
+               case "video_view_num":
+                   dataList.add(dailyStatistics.getVideoViewNum());
+                   break;
+               case "course_num":
+                   dataList.add(dailyStatistics.getCourseNum());
+                   break;
+               default:
+                   break;
+           }
+       });
+       map.put("dateCalculatedList",dateCalculatedList);
+       map.put("dataList",dataList);
+       return map;
+   }
+   ```
+
+### 4、效果
+
+<img src="README.assets/image-20220423221603916.png" alt="image-20220423221603916" style="zoom:67%;" /> 
+
+# 十三、canal数据同步工具
+
+## 1、应用场景
+
+在前面的统计分析功能中，我们采取了服务调用获取统计数据，这样耦合度高，效率相对较低，目前我采取另一种实现方式，通过实时同步数据库表的方式实现，例如我们要统计每天注册与登录人数，我们只需把**会员表同步到统计库**中，实现本地统计就可以了，这样效率更高，耦合度更低，Canal就是一个很好的数据库同步工具。canal是阿里巴巴旗下的一款开源项目，纯Java开发。基于数据库增量日志解析，提供增量数据订阅&消费，目前主要支持了MySQL。
 
 
-  
 
+## 2、Canal环境搭建
 
+Linux系统和Windows系统的Mysql新建结构完全相同的表`members`，开始实现对Linux系统的表操作后，Windows系统的表会随着一起变化
 
+> canal的原理是基于mysql binlog技术，所以这里一定需要开启mysql的binlog写入功能
 
+1. 检查binlog功能是否有开启
+
+   ```mysql
+   mysql> show variables like 'log_bin';
+   +---------------+-------+
+   | Variable_name | Value |
+   +---------------+-------+
+   | log_bin       | ON    |
+   +---------------+-------+
+   1 row in set (0.02 sec)
+   ```
+
+2. 如果显示状态为**OFF**表示该功能未开启，开启binlog功能
+
+   ```shell
+   # 1、修改 mysql 的配置文件 my.cnf
+   vi /etc/my.cnf
+   # 追加内容：
+   log-bin=mysql-bin #binlog文件名
+   binlog_format=ROW #选择row模式
+   server_id=1 #mysql实例id,不能和canal的slaveId重复
+   #2、重启 mysql：
+   systemctl restart mysqld.service
+   #3、登录 mysql 客户端，查看 log_bin 变量
+   mysql> show variables like 'log_bin';
+   +---------------+-------+
+   | Variable_name | Value |
+   +---------------+-------+
+   | log_bin       | ON    |
+   +---------------+-------+
+   1 row in set (0.00 sec)
+   ————————————————
+   如果显示状态为ON表示该功能已开启
+   ```
+
+3. 在Linux的mysql里面添加以下的相关用户和权限，让Windows的Navticat能直接通过用户canal访问Linux的数据库
+
+   ```mysql
+   CREATE USER 'canal'@'%' IDENTIFIED BY 'canal';
+   #若报错密码不符合规则，执行：
+   set global validate_password.length=5;
+   set global validate_password.policy=0;
+   
+   GRANT SHOW VIEW, SELECT, REPLICATION SLAVE, REPLICATION CLIENT ON *.* TO 'canal'@'%';
+   
+   FLUSH PRIVILEGES;
+   ```
+
+## 3、下载安装Canal服务
+
+下载地址：https://github.com/alibaba/canal/releases
+
+1. 下载之后，放到`/usr/local/canal`目录中
+
+2. 解压文件
+
+   ```shell
+   tar zxvf canal.deployer-1.1.4.tar.gz
+   ```
+
+3. 修改配置文件
+
+   ```shell
+   [root@localhost canal] # vim conf/example/instance.properties
+   
+   #需要改成自己的数据库信息
+   canal.instance.master.address=192.168.9.130:3306  #Linux系统的ip
+   #需要改成自己的数据库用户名与密码
+   canal.instance.dbUsername=canal
+   canal.instance.dbPassword=canal
+   #需要改成同步的数据库表规则，例如只是同步一下表
+   #canal.instance.filter.regex=.*\\..*
+   canal.instance.filter.regex=guli_ucenter.ucenter_member
+   ```
+
+   regex规则：
+
+   <img src="README.assets/image-20220424013255303.png" alt="image-20220424013255303" style="zoom: 50%;" /> 
+
+4. 进入bin目录下启动
+
+   ```shell
+   [root@localhost bin]# ./startup.sh   #启动
+   					# ./stop.sh		#关闭
+   ```
+
+## 4、项目整合Canal
+
+### 4-1、创建canal_client模块
+
+1. 引入依赖
+
+   ```xml
+   <dependencies>
+       <dependency>
+           <groupId>org.springframework.boot</groupId>
+           <artifactId>spring-boot-starter-web</artifactId>
+       </dependency>
+       <!--mysql-->
+       <dependency>
+           <groupId>mysql</groupId>
+           <artifactId>mysql-connector-java</artifactId>
+       </dependency>
+       <dependency>
+           <groupId>commons-dbutils</groupId>
+           <artifactId>commons-dbutils</artifactId>
+       </dependency>
+       <dependency>
+           <groupId>org.springframework.boot</groupId>
+           <artifactId>spring-boot-starter-jdbc</artifactId>
+       </dependency>
+       <dependency>
+           <groupId>com.alibaba.otter</groupId>
+           <artifactId>canal.client</artifactId>
+       </dependency>
+   </dependencies>
+   ```
+
+2. 创建配置文件
+
+   ```yaml
+   server:
+     port: 10000
+   spring:
+     application:
+       name: canal.client
+     profiles:
+       active: dev  # 环境设置：dev、test、prod
+     datasource:
+       driver-class-name: com.mysql.cj.jdbc.Driver  # mysql数据库链接
+       url: jdbc:mysql://localhost:3306/guli_edu?serverTimezone=GMT%2B8
+       username: root
+       password: 123456
+   ```
+
+3. 编写canal客户端类
+
+   ```java
+   package com.geek.canal.client;
+   
+   import com.alibaba.otter.canal.client.CanalConnector;
+   import com.alibaba.otter.canal.client.CanalConnectors;
+   import com.alibaba.otter.canal.protocol.CanalEntry.*;
+   import com.alibaba.otter.canal.protocol.Message;
+   import com.google.protobuf.InvalidProtocolBufferException;
+   import org.apache.commons.dbutils.DbUtils;
+   import org.apache.commons.dbutils.QueryRunner;
+   import org.springframework.stereotype.Component;
+   
+   import javax.annotation.Resource;
+   import javax.sql.DataSource;
+   import java.net.InetSocketAddress;
+   import java.sql.Connection;
+   import java.sql.SQLException;
+   import java.util.Iterator;
+   import java.util.List;
+   import java.util.Queue;
+   import java.util.concurrent.ConcurrentLinkedQueue;
+   
+   /**
+    * @ClassName CanalClient
+    * @Description TODO
+    * @Author Lambert
+    * @Date 2022/4/24 1:45
+    * @Version 1.0
+    **/
+   @Component
+   public class CanalClient {
+       //sql队列
+       private Queue<String> SQL_QUEUE = new ConcurrentLinkedQueue<>();
+       @Resource
+       private DataSource dataSource;
+   
+       /**
+        * canal入库方法
+        */
+       public void run() {
+           CanalConnector connector = CanalConnectors.newSingleConnector(new
+                           InetSocketAddress("192.168.44.132", 11111),
+                   "example", "", "");
+           int batchSize = 1000;
+           try {
+               connector.connect();
+               connector.subscribe(".*\\..*");
+               connector.rollback();
+               try {
+                   while (true) {
+                       //尝试从master那边拉去数据batchSize条记录，有多少取多少
+                       Message message = connector.getWithoutAck(batchSize);
+                       long batchId = message.getId();
+                       int size = message.getEntries().size();
+                       if (batchId == -1 || size == 0) {
+                           Thread.sleep(1000);
+                       } else {
+                           dataHandle(message.getEntries());
+                       }
+                       connector.ack(batchId);
+                       //当队列里面堆积的sql大于一定数值的时候就模拟执行
+                       if (SQL_QUEUE.size() >= 1) {
+                           executeQueueSql();
+                       }
+                   }
+               } catch (InterruptedException e) {
+                   e.printStackTrace();
+               } catch (InvalidProtocolBufferException e) {
+                   e.printStackTrace();
+               }
+           } finally {
+               connector.disconnect();
+           }
+       }
+   
+       /**
+        * 模拟执行队列里面的sql语句
+        */
+       public void executeQueueSql() {
+           int size = SQL_QUEUE.size();
+           for (int i = 0; i < size; i++) {
+               String sql = SQL_QUEUE.poll();
+               System.out.println("[sql]----> " + sql);
+               this.execute(sql.toString());
+           }
+       }
+   
+       /**
+        * 数据处理
+        *
+        * @param entrys
+        */
+       private void dataHandle(List<Entry> entrys) throws
+               InvalidProtocolBufferException {
+           for (Entry entry : entrys) {
+               if (EntryType.ROWDATA == entry.getEntryType()) {
+                   RowChange rowChange = RowChange.parseFrom(entry.getStoreValue());
+                   EventType eventType = rowChange.getEventType();
+                   if (eventType == EventType.DELETE) {
+                       saveDeleteSql(entry);
+                   } else if (eventType == EventType.UPDATE) {
+                       saveUpdateSql(entry);
+                   } else if (eventType == EventType.INSERT) {
+                       saveInsertSql(entry);
+                   }
+               }
+           }
+       }
+   
+       /**
+        * 保存更新语句
+        *
+        * @param entry
+        */
+       private void saveUpdateSql(Entry entry) {
+           try {
+               RowChange rowChange = RowChange.parseFrom(entry.getStoreValue());
+               List<RowData> rowDatasList = rowChange.getRowDatasList();
+               for (RowData rowData : rowDatasList) {
+                   List<Column> newColumnList = rowData.getAfterColumnsList();
+                   StringBuffer sql = new StringBuffer("update " +
+                           entry.getHeader().getTableName() + " set ");
+                   for (int i = 0; i < newColumnList.size(); i++) {
+                       sql.append(" " + newColumnList.get(i).getName()
+                               + " = '" + newColumnList.get(i).getValue() + "'");
+                       if (i != newColumnList.size() - 1) {
+                           sql.append(",");
+                       }
+                   }
+                   sql.append(" where ");
+                   List<Column> oldColumnList = rowData.getBeforeColumnsList();
+                   for (Column column : oldColumnList) {
+                       if (column.getIsKey()) {
+                           //暂时只支持单一主键
+                           sql.append(column.getName() + "=" + column.getValue());
+                           break;
+                       }
+                   }
+                   SQL_QUEUE.add(sql.toString());
+               }
+           } catch (InvalidProtocolBufferException e) {
+               e.printStackTrace();
+           }
+       }
+   
+       /**
+        * 保存删除语句
+        *
+        * @param entry
+        */
+       private void saveDeleteSql(Entry entry) {
+           try {
+               RowChange rowChange = RowChange.parseFrom(entry.getStoreValue());
+               List<RowData> rowDatasList = rowChange.getRowDatasList();
+               for (RowData rowData : rowDatasList) {
+                   List<Column> columnList = rowData.getBeforeColumnsList();
+                   StringBuffer sql = new StringBuffer("delete from " +
+                           entry.getHeader().getTableName() + " where ");
+                   for (Column column : columnList) {
+                       if (column.getIsKey()) {
+                           //暂时只支持单一主键
+                           sql.append(column.getName() + "=" + column.getValue());
+                           break;
+                       }
+                   }
+                   SQL_QUEUE.add(sql.toString());
+               }
+           } catch (InvalidProtocolBufferException e) {
+               e.printStackTrace();
+           }
+       }
+   
+       /**
+        * 保存插入语句
+        *
+        * @param entry
+        */
+       private void saveInsertSql(Entry entry) {
+           try {
+               RowChange rowChange = RowChange.parseFrom(entry.getStoreValue());
+               List<RowData> rowDatasList = rowChange.getRowDatasList();
+               for (RowData rowData : rowDatasList) {
+                   List<Column> columnList = rowData.getAfterColumnsList();
+                   StringBuffer sql = new StringBuffer("insert into " +
+                           entry.getHeader().getTableName() + " (");
+                   for (int i = 0; i < columnList.size(); i++) {
+                       sql.append(columnList.get(i).getName());
+                       if (i != columnList.size() - 1) {
+                           sql.append(",");
+                       }
+                   }
+                   sql.append(") VALUES (");
+                   for (int i = 0; i < columnList.size(); i++) {
+                       sql.append("'" + columnList.get(i).getValue() + "'");
+                       if (i != columnList.size() - 1) {
+                           sql.append(",");
+                       }
+                   }
+                   sql.append(")");
+                   SQL_QUEUE.add(sql.toString());
+               }
+           } catch (InvalidProtocolBufferException e) {
+               e.printStackTrace();
+           }
+       }
+   
+       /**
+        * 入库
+        *
+        * @param sql
+        */
+       public void execute(String sql) {
+           Connection con = null;
+           try {
+               if (null == sql) return;
+               con = dataSource.getConnection();
+               QueryRunner qr = new QueryRunner();
+               int row = qr.execute(con, sql);
+               System.out.println("update: " + row);
+           } catch (SQLException e) {
+               e.printStackTrace();
+           } finally {
+               DbUtils.closeQuietly(con);
+           }
+       }
+   }
+   ```
+
+4. 创建启动类
+
+   ```java
+   @SpringBootApplication
+   public class CanalClientApplication implements CommandLineRunner {
+       @Resource
+       private CanalClient canalClient;
+   
+       public static void main(String[] args) {
+           SpringApplication.run(CanalClientApplication.class, args);
+       }
+   
+       @Override
+       public void run(String... args) throws Exception {
+           //项目启动，执行canal客户端监听
+           canalClient.run();
+       }
+   }
+   ```
+
+   Linux需要给端口11111关闭防火墙
+
+5. 测试
+
+   1. 给Linux系统数据库的members表插入两条数据
+
+      ```mysql
+      mysql> insert into members values(1,"lucy",20);
+      Query OK, 1 row affected (0.01 sec)
+      mysql> insert into members values(2,"Tom",21);
+      Query OK, 1 row affected (0.01 sec)
+      ```
+
+   2. 控制台
+
+      <img src="README.assets/image-20220424020923946.png" style="zoom:67%;" />
+
+      <img src="README.assets/image-20220424021034884.png" alt="image-20220424021034884" style="zoom:67%;" />
+
+   3. 修改结果
+
+      <img src="README.assets/image-20220424021205292.png" alt="image-20220424021205292" style="zoom: 50%;" /> 
+
+> 为方便后续操作，可以在canal的配置文件修改匹配规则为所有相同的表
+>
+> ```shell
+> [root@localhost canal] # vim conf/example/instance.properties
+> 
+> canal.instance.filter.regex=.*\\..*
+> ```
 
 
 

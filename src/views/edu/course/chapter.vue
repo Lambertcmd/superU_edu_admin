@@ -187,12 +187,13 @@ export default {
       chapterVideoList: [],
       dialogChapterFormVisible: false,//添加章节的弹框是否启用
       chapter: {//封装章节的数据
-        id:"",
+        id: "",
         title: "",
         sort: 0
       },
       dialogVideoFormVisible: false,//添加小节的弹框是否显示
       video: {
+        id: "",
         title: "",
         sort: 0,
         isFree: 0,
@@ -245,6 +246,10 @@ export default {
       this.video.videoOriginalName = file.name
       this.fileList = fileList
     },
+    //上传视频时调用的方法
+    handleVodUploadProgress(event, file, fileList) {
+
+    },
     //上传视频之前调用的方法
     handleUploadExceed() {
       this.$message.warning("想要重新上传视频，请先删除已上传的视频")
@@ -271,9 +276,6 @@ export default {
         });
       });
     },
-
-
-
     //判断是添加还是修改小节
     saveOrUpdateVideo() {
       this.saveVideoBtnDisabled = true

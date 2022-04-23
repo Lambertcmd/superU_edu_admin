@@ -51,7 +51,7 @@ export const constantRoutes = [
       path: 'dashboard',
       name: 'Dashboard',
       component: () => import('@/views/dashboard/index'),
-      meta: { title: '谷粒学院后台管理系统', icon: 'dashboard' }
+      meta: { title: '谷粒学院后台管理系统', icon: 'nested' }
     }]
   },
 
@@ -108,7 +108,7 @@ export const constantRoutes = [
   {
     path: '/course',
     component: Layout,
-    redirect: '/course/list',//访问/subject，路径自动重定向为/course/list
+    redirect: '/course/list',//访问/course，路径自动重定向为/course/list
     name: '课程管理',
     meta: { title: '课程管理', icon: 'el-icon-s-help' },//title：侧边栏标题，icon：标题旁边的图标
     children: [
@@ -147,6 +147,28 @@ export const constantRoutes = [
       }
     ]
   },
+  {
+    path: '/statistics/daily',
+    component: Layout,
+    redirect: '/statistics/daily/create',
+    name: '统计分析',
+    meta: { title: '统计分析', icon: 'dashboard' },
+    children: [
+      {
+        path: 'show',
+        name: 'StatisticsDailyShow',
+        component: () => import('@/views/statistics/daily/show'),
+        meta: { title: '统计数据显示', icon: 'table' }
+      },
+      {
+        path: 'create',
+        name: 'StatisticsDailyCreate',
+        component: () => import('@/views/statistics/daily/create'),
+        meta: { title: '生成统计数据', icon: 'form' }
+      }
+    ]
+  },
+
 
   // {
   //   path: '/example',
