@@ -5049,9 +5049,143 @@ Linux系统和Windows系统的Mysql新建结构完全相同的表`members`，开
 > canal.instance.filter.regex=.*\\..*
 > ```
 
+# 十四、SpringCloud Gateway网关模块
+
+> 替代nginx实现请求转发、负载均衡以及跨域
+
+## 1、新建api-gateway模块
 
 
 
+## 2、引入POM依赖
 
+```xml
+        <dependency>
+            <groupId>com.geek</groupId>
+            <artifactId>common_utils</artifactId>
+            <version>0.0.1-SNAPSHOT</version>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-alibaba-nacos-discovery</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-gateway</artifactId>
+        </dependency>
+        <!--gson-->
+        <dependency>
+            <groupId>com.google.code.gson</groupId>
+            <artifactId>gson</artifactId>
+        </dependency>
+        <!--服务调用-->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-openfeign</artifactId>
+        </dependency>
+```
 
+## 3、yml配置文件
 
+> 请求转发实现
+
+```yaml
+server:
+  port: 8222 #服务端口
+spring:
+  application:
+    name: service-gateway
+  cloud:
+    nacos:
+      discovery:
+        server-addr: localhost:8848 #配置nacos服务地址
+    gateway:
+      discovery:
+        locator:
+          enabled: true  #使用服务发现路由
+          #          lower-case-service-id: true #服务路由名小写
+      routes:
+        - id: service-acl         #设置路由id
+          uri: lb://service-acl   #设置路由的uri
+          predicates:
+            - Path=/*/acl/** #设置路由断言,代理servicerId为auth-service的/auth/路径
+
+        - id: service-edu  #配置service-edu服务
+          uri: lb://service-edu
+          predicates:
+            - Path=/eduservice/**
+
+        - id: service-ucenter  #配置service-ucenter服务
+          uri: lb://service-ucenter
+          predicates:
+            - Path=/educenter/**
+            - Path=/api/ucenter/**
+
+        - id: service-cms  #配置service-cms服务
+          uri: lb://service-cms
+          predicates:
+            - Path=/educms/**
+
+        - id: service-msm  #配置service-msm服务
+          uri: lb://service-msm
+          predicates:
+            - Path=/edumsm/**
+
+        - id: service-order  #配置service-order服务
+          uri: lb://service-order
+          predicates:
+            - Path=/eduorder/**
+
+        - id: service-oss  #配置service-oss服务
+          uri: lb://service-oss
+          predicates:
+            - Path=/eduoss/**
+
+        - id: service-statistics  #配置service-statistics服务
+          uri: lb://service-statistics
+          predicates:
+            - Path=/edustatistics/**
+
+        - id: service-vod  #配置service-vod服务
+          uri: lb://service-vod
+          predicates:
+            - Path=/eduvod/**
+```
+
+## 4、跨域解决
+
+```java
+package com.geek.gateway.config;
+
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.reactive.CorsWebFilter;
+import org.springframework.web.cors.reactive.UrlBasedCorsConfigurationSource;
+import org.springframework.web.util.pattern.PathPatternParser;
+
+/**
+ * @ClassName CorsConfig
+ * @Description 处理全局跨域
+ * @Author Lambert
+ * @Date 2022/4/24 15:49
+ * @Version 1.0
+ **/
+@Configuration
+public class CorsConfig {
+    @Bean
+    public CorsWebFilter corsFilter() {
+        CorsConfiguration config = new CorsConfiguration();
+        config.addAllowedMethod("*");
+        config.addAllowedOrigin("*");
+        config.addAllowedHeader("*");
+
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource(new PathPatternParser());
+        source.registerCorsConfiguration("/**", config);
+
+        return new CorsWebFilter(source);
+    }
+}
+```
+
+## 5、删除每个controller的@CrossOrgin注解
