@@ -2,6 +2,9 @@
 
 # 一、项目介绍
 
+> 在线教育系统，分为前台网站系统和后台运营平台，B2C模式。
+> 前台用户系统包括课程、讲师、问答、文章几大大部分，使用了微服务技术架构，前后端分离开发。
+
 ## 01、商业模式介绍
 
 ### 01-1、B2C模式
@@ -5221,4 +5224,304 @@ Spring Security其实就是用**filter**，多请求的路径进行过滤。
 1. 用户根据用户名密码认证成功，然后获取当前用户角色的一系列权限值，并以用户名为key，权限列表为value的形式存入redis缓存中
 2. 根据用户名相关信息生成token返回，浏览器将token记录到cookie中，
 3. 每次调用api接口都默认将token携带到header请求头中，Spring-security解析header头获取token信息，解析token获取当前用户名，根据用户名就可以从redis中获取权限列表，这样Spring-security就能够判断当前请求是否有权限访问
+
+# 十六、项目部署-Jenkins
+
+## 1、部署准备
+
+
+
+### 1-1、安装JAVA jdk运行环境
+
+1. 下载jdk
+
+2. 解压jdk
+
+   ```shell
+   [root@localhost local]# tar -zxvf jdk-8u144-linux-x64.tar.gz
+   ```
+
+3. 新建一个快捷文件夹
+
+   ```shell
+   ln -s /usr/local/jdk1.8.0_144/ /usr/local/jdk
+   ```
+
+4. 修改环境变量
+
+   ```shell
+   [root@localhost local]#vim /etc/profile
+   #添加如下
+   export JAVA_HOME=/usr/local/jdk
+   export JRE_HOME=$JAVA_HOME/jre
+   export CLASSPATH=.:$CLASSPATH:$JAVA_HOME/lib:$JRE_HOME/lib
+   export PATH=$PATH:$JAVA_HOME/bin:$JRE_HOME/bin
+   #通过命令source /etc/profile让profile文件立即生效
+   [root@localhost local]#source /etc/profile
+   ```
+
+5. 测试是否安装成功
+
+   ```shell
+   [root@localhost local]# java -version
+   java version "1.8.0_144"
+   Java(TM) SE Runtime Environment (build 1.8.0_144-b01)
+   Java HotSpot(TM) 64-Bit Server VM (build 25.144-b01, mixed mode)
+   ```
+
+### 1-2、maven环境
+
+1. 官网下载安装包
+
+   ```shell
+   [root@localhost local]# cd /usr/local
+   [root@localhost local]# ls
+   apache-maven-3.8.5-bin.tar.gz  bin  canal  etc  games  include  lib  lib64  libexec  sbin  share  src
+   ```
+
+2. 解压安装包
+
+   ```shell
+   [root@localhost local]# tar -zxvf apache-maven-3.8.5-bin.tar.gz
+   ```
+
+3. 建立软连接
+
+   ```shell
+   [root@localhost local]# ln -s /usr/local/apache-maven-3.8.5 /usr/local/maven
+   ```
+
+4. 修改环境变量
+
+   ```shell
+   [root@localhost local]# vim /etc/profile
+   #添加以下
+   export MAVEN_HOME=/usr/local/maven
+   export PATH=$PATH:$MAVEN_HOME/bin
+   #通过命令source /etc/profile让profile文件立即生效
+   [root@localhost local]# source /etc/profile
+   ```
+
+5. 测试是否安装成功
+
+   ```shell
+   [root@localhost local]# mvn -v
+   Apache Maven 3.8.5 (3599d3414f046de2324203b78ddcf9b5e4388aa0)
+   Maven home: /usr/local/maven
+   Java version: 1.8.0_131, vendor: Oracle Corporation, runtime: /usr/lib/jvm/java-1.8.0-openjdk-1.8.0.131-11.b12.el7.x86_64/jre
+   Default locale: zh_CN, platform encoding: UTF-8
+   OS name: "linux", version: "3.10.0-693.el7.x86_64", arch: "amd64", family: "unix"
+   ```
+
+### 1-3、安装git
+
+```shell
+[root@localhost local]# yum -y install git
+```
+
+### 1-4、安装docker
+
+```shell
+#安装必要的一些系统工具
+[root@localhost local]# yum install -y yum-utils device-mapper-persistent-data lvm2
+...
+
+#添加软件源信息
+[root@localhost local]# yum-config-manager --add-repo http://mirrors.aliyun.com/docker-ce/linux/centos/docker-ce.repo
+...
+
+#更新并安装Docker-CE
+[root@localhost local]# yum makecache fast
+...
+[root@localhost local]# yum -y install docker-ce
+
+#开启Docker服务
+[root@localhost local]# service docker start
+Redirecting to /bin/systemctl start docker.service
+#测试是否安装成功
+[root@localhost local]# docker -v
+Docker version 20.10.15, build fd82621
+```
+
+### 1-5、安装Jenkins
+
+1. 官网（http://mirrors.jenkins-ci.org/war-stable/）下载war包：jenkins.war
+
+   ```shell
+   [root@localhost local]# mkdir jenkins
+   [root@localhost local]# cd jenkins
+   [root@localhost jenkins]# ls
+   jenkins.war
+   ```
+
+2. 启动
+
+   ```shell
+   [root@localhost jenkins]# nohup java -jar /usr/local/jenkins/jenkins.war >/usr/local/jenkins/jenkins.out &
+   [4] 5025
+   [root@localhost jenkins]# nohup: 忽略输入重定向错误到标准输出端 
+   <回车>
+   ```
+
+3. 访问:http://192.168.9.130:8080
+
+## 2、初始化Jenkins插件和管理员用户
+
+### 2-1、访问jenkins
+
+路径：http://192.168.9.130:8080
+
+### 2-2、解锁jenkins
+
+<img src="README.assets/image-20220507225910625.png" alt="image-20220507225910625"  /> 
+
+获取管理员密码
+
+```shell
+[root@localhost jenkins]# cat /root/.jenkins/secrets/initialAdminPassword
+3d2b50e2591e4820a490fc7baa659827
+```
+
+### 2-3、安装插件
+
+<img src="README.assets/image-20220507230034454.png" alt="image-20220507230034454" style="zoom: 33%;" />   
+
+这里需要注意：配置国内的镜像 官方下载插件慢 更新下载地址
+
+```shell
+#进入更新配置位置
+[root@localhost jenkins]# cd /root/.jenkins/updates
+[root@localhost updates]# sed -i 's/http:\/\/updates.jenkins-ci.org\/download/https:\/\/mirrors.tuna.tsinghua.edu.cn\/jenkins/g' default.json && sed -i 's/http:\/\/www.google.com/https:\/\/www.baidu.com/g' default.json
+
+#重启jenkins
+[root@localhost jenkins]# ps -ef | grep jenkins
+root       4887   2752  4 18:40 pts/0    00:00:49 java -jar /usr/local/jenkins/jenkins.war
+root       8131   2752  0 18:58 pts/0    00:00:00 grep --color=auto jenkins
+[root@localhost jenkins]# kill -9 4887
+[root@localhost jenkins]# nohup java -jar /usr/local/jenkins/jenkins.war >/usr/local/jenkins/jenkins.out &
+[1] 8196
+[root@localhost jenkins]# nohup: 忽略输入重定向错误到标准输出端
+```
+
+点击安装推荐的插件后：
+
+<img src="README.assets/image-20220507231259690.png" alt="image-20220507231259690" style="zoom: 33%;" />  
+
+### 2-4、插件安装完成，创建管理员用户
+
+<img src="README.assets/image-20220507232131666.png" alt="image-20220507232131666" style="zoom:50%;" /> 
+
+我这里用户名设为了root
+
+### 2-5、实例配置
+
+<img src="README.assets/image-20220507232537937.png" alt="image-20220507232537937" style="zoom:50%;" /> 
+
+此处不需要修改
+
+<img src="README.assets/image-20220507232559462.png" alt="image-20220507232559462" style="zoom:50%;" /> 
+
+ 
+
+## 3、Jenkins配置
+
+1. 进入全局配置
+
+   <img src="README.assets/image-20220507233339246.png" alt="image-20220507233339246" style="zoom:33%;" /> 
+
+2. 配置jdk
+
+   <img src="README.assets/image-20220508001919493.png" alt="image-20220508001919493" style="zoom: 33%;" /> 
+
+3. 配置maven
+
+   <img src="README.assets/image-20220508002041754.png" alt="image-20220508002041754" style="zoom: 33%;" /> 
+
+4. 配置git环境
+
+   ```shell
+   #查看git安装路径
+   [root@localhost bin]# which git
+   /bin/git
+   ```
+
+## 4、构建作业
+
+1. 新建Item
+
+   <img src="README.assets/image-20220508003602674.png" style="zoom: 33%;" /> 
+
+   
+
+2. 配置远程仓库路径和账户密码
+
+   <img src="README.assets/image-20220508003814517.png" alt="image-20220508003814517" style="zoom: 33%;" /> 
+
+3. 选择构建步骤
+
+   <img src="README.assets/image-20220508003952233.png" alt="image-20220508003952233" style="zoom: 50%;" /> 
+
+   将docker脚本的内容复制到这并修改项目根目录、项目名称和端口号
+
+   <img src="README.assets/image-20220508004345431.png" alt="image-20220508004345431" style="zoom: 50%;" /> 
+
+   ```sh
+   #!/bin/bash
+   #maven打包
+   mvn clean package
+   echo 'package ok!'
+   echo 'build start!'
+   cd ./  #项目根目录
+   service_name="guli_edu" #项目名
+   service_port=8761 #项目端口
+   #查看镜像id
+   IID=$(docker images | grep "$service_name" | awk '{print $3}')
+   echo "IID $IID"
+   if [ -n "$IID" ]
+   then
+       echo "exist $service_name image,IID=$IID"
+       #删除镜像
+       docker rmi -f $service_name
+       echo "delete $SERVER_NAME image"
+       #构建
+       docker build -t $service_name .
+       echo "build $SERVER_NAME image"
+   else
+       echo "no exist $SERVER_NAME image,build docker"
+       #构建
+       docker build -t $service_name .
+       echo "build $SERVER_NAME image"
+   fi
+   #查看容器id
+   CID=$(docker ps | grep "$SERVER_NAME" | awk '{print $1}')
+   echo "CID $CID"
+   if [ -n "$CID" ]
+   then
+       echo "exist $SERVER_NAME container,CID=$CID"
+       #停止
+       docker stop $service_name
+       #删除容器
+       docker rm $service_name
+   else
+       echo "no exist $SERVER_NAME container"
+   fi
+   #启动
+   docker run -d --name $service_name --net=host -p $service_port:$service_port $service_name
+   #查看启动日志
+   #docker logs -f  $service_name
+   ```
+
+就能开始启动部署了
+
+ 
+
+
+
+
+
+
+
+ 
+
+
 
