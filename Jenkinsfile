@@ -1,4 +1,4 @@
-//gitlab的凭证
+//gitee的凭证
 def git_auth = "47603b91-4a76-4b71-a19d-800f13049567"
 def git_url = "git@gitee.com:lambertee/guli_edu_admin.git"
 node {
